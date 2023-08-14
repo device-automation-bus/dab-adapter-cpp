@@ -1,0 +1,12 @@
+{
+  "name" : "dab",
+  "version-string" : "1.0.0",
+  "builtin-baseline" : "247662ef304453c72acd6b520fa7ff7656e7347c",
+  "dependencies" : [ {
+    "name" : "openssl",
+    "version>=" : "3.1.2#1"
+  }, {
+    "name" : "paho-mqtt",
+    "version>=" : "1.3.12#1"
+  } ]
+}

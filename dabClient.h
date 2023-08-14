@@ -1,0 +1,685 @@
+/**
+ Copyright 2023 Amazon.com, Inc. or its affiliates.
+ Copyright 2023 Netflix Inc.
+ Copyright 2023 Google LLC
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+ http://www.apache.org/licenses/LICENSE-2.0
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+ */
+
+#pragma once
+
+#include <thread>
+#include <cstdint>
+#include <initializer_list>
+#include <cassert>
+#include <chrono>
+#include <functional>
+#include <string>
+#include <memory>
+#include <utility>
+
+#include "Json.h"
+
+namespace DAB
+{
+    struct dabException : std::exception
+    {
+        int64_t errorCode;
+        std::string errorText;
+    public:
+        dabException ( int64_t errorCode, std::string errorText ) : errorCode ( errorCode ), errorText (std::move( errorText ))
+        {
+        }
+    };
+
+    class dabInterface;
+
+    // our dispatcher base class.  This serves as the polymorphic interface to allow us to dispatch against specialized instances
+    template< typename T >
+    struct dispatcher
+    {
+        virtual ~dispatcher () = default;
+
+        virtual jsonElement operator() ( T *cls, jsonElement const &elem ) = 0;
+    };
+
+    // this is the template for our dispatcher.  It itself is never instantiated, but allows us to specialize the actual templates we need
+    template< size_t, size_t, class T, class F >
+    struct nativeDispatch : public dispatcher<T>
+    {
+        nativeDispatch ()
+        {
+            assert ( false );
+        }
+
+        nativeDispatch ( F, std::vector<std::string> const &, std::vector<std::string> const & )
+        {}
+
+        ~nativeDispatch () = default;
+
+        jsonElement operator() ( T *, jsonElement const & ) override
+        {
+            throw dabException{500, "server error"};
+        }
+    };
+
+    // this is our actual dispatcher.
+    // it's purpose is to take call a c++ method, but call it with parameters that are extracted from the json parameter being passed in.
+    // there are two types of parameter arrays.  fixedParams whose value MUST be present in the json, and optionalParams whose value need not be present in the json, and if not there a default constructed version is passed in
+    // template takes the number of fixed and optional parameters, the type of class used to dispatch against and the R ( C:: * )(Args...)  prototype for the method to call
+    template< size_t nFixed, size_t nOptional, typename T, class R, class C, class ... Args >
+    struct nativeDispatch<nFixed, nOptional, T, R ( C::* ) ( Args... )> : public dispatcher<T>
+    {
+        nativeDispatch ()
+        {
+            assert ( false );
+        }
+
+        // the constructor takes the function pointer of the method to call, and a vector of fixed and a vector of optional paramters
+        nativeDispatch ( R ( C::*func ) ( Args... ), std::vector<std::string_view> const &fixedParams, std::vector<std::string_view> const &optionalParams ) : fixedParams ( fixedParams ), optionalParams ( optionalParams )
+        {
+            funcPtr = func;
+        }
+
+        virtual ~nativeDispatch () = default;
+
+        // this is the main dispatch entry point.  It takes a pointer to the class of the method to call, and the jsonElement containing any fixed and/or optional parameters to extract and call the method with
+        jsonElement operator() ( T *cls, jsonElement const &elem ) override
+        {
+            // call the fixed position of our dispatcher.   This is
+            return callFixed<0, 0> ( cls, elem, types < Args... > {} );
+        }
+
+    private:
+
+        R ( C::*funcPtr ) ( Args... );
+
+        std::vector<std::string_view> fixedParams;
+        std::vector<std::string_view> optionalParams;
+
+        // typelist for our metap-rogram below
+        template< class ... >
+        struct types
+        {
+        };
+
+        // start iterating through any fixed parameters.   We lookup the element in the jsonElement class and recurse into the function again with the looked up element at the end of the parameter list
+        //     this results in a function call with the jsonElements automatically discovered
+        //     the first two parameters are which fixed and optional parameters to extract
+        template< size_t fixed, size_t optional, class Head, class ... Tail, class ...Vs >
+        jsonElement callFixed ( T *cls, jsonElement const &elem, types<Head, Tail ...>, Vs &&...vs )
+        {
+            if constexpr ( fixed < nFixed )
+            {
+                // extract the fixedParams (the one we're current extracting is passed in by the first template parameter
+                // then recurse but call the next template parameter,  the extracted parameters are appended onto the end as a VS...vs parameter pack
+                if ( elem["payload"].has ( fixedParams[fixed] ))
+                {
+                    return callFixed<fixed + 1, optional> ( cls, elem, types<Tail...>{}, std::forward<Vs> ( vs )..., elem["payload"][fixedParams[fixed]] );
+                } else if ( elem.has ( fixedParams[fixed] ))
+                {
+                    return callFixed<fixed + 1, optional> ( cls, elem, types<Tail...>{}, std::forward<Vs> ( vs )..., elem[fixedParams[fixed]] );
+                } else
+                {
+                    throw dabException{400, std::string ( "missing parameter \"" ) + fixedParams[fixed].data () + "\""};
+                }
+            } else
+            {
+                // we have extracted all the fixed parameters, no call start extracting any optional parameters
+                return callOptional<fixed, optional> ( cls, elem, types<Head, Tail...>{}, std::forward<Vs> ( vs )... );
+            }
+        }
+
+        // for cases with NO optional parameters
+        template< size_t fixed, size_t optional, class ...Vs >
+        jsonElement callFixed ( T *cls, jsonElement const &, types<>, Vs &&...vs )
+        {
+            static_assert ( fixed == nFixed );
+            static_assert ( !optional );
+
+            if constexpr ( std::is_same_v<R, void> )
+            {
+                (cls->*funcPtr) ( std::forward<Vs> ( vs )... );
+                return {};
+            } else
+            {
+                return (cls->*funcPtr) ( std::forward<Vs> ( vs )... );
+            }
+        }
+
+        // start extracting the optional parameters and looking them up in the jsonElement.   If the desired element isn't present in the passed in json object, then we just create a default-initialized value of type HEAD
+        template< size_t fixed, size_t optional, class Head, class ... Tail, class ...Vs >
+        jsonElement callOptional ( T *cls, jsonElement const &elem, types<Head, Tail ...>, Vs &&...vs )
+        {
+            // see if the desired element is present
+            if ( elem["payload"].has ( optionalParams[optional] ))
+            {
+                // it is, so extract and call it
+                return callOptional<fixed, optional + 1> ( cls, elem, types<Tail...>{}, std::forward<Vs> ( vs )..., elem["payload"][optionalParams[optional]] );
+            } else if ( elem.has ( optionalParams[optional] ))
+            {
+                // it is, so extract and call it
+                return callOptional<fixed, optional + 1> ( cls, elem, types<Tail...>{}, std::forward<Vs> ( vs )..., elem[optionalParams[optional]] );
+            } else
+            {
+                // it's not so create a default initialized value of the desired type
+                return callOptional<fixed, optional + 1> ( cls, elem, types<Tail...>{}, std::forward<Vs> ( vs )..., Head{} );
+            }
+        }
+
+        // we've now generated function parameters (vs) for all our specified fixed and optional parameters, and it's now time to call the function
+        template< size_t fixed, size_t optional, class ...Vs >
+        jsonElement callOptional ( T *cls, jsonElement const &, types<>, Vs &&...vs )
+        {
+            static_assert ( fixed == nFixed );
+            static_assert ( optional == nOptional );
+
+            // test to see if the function's return type is void, if it is, than just create a jsonElement as a return type
+            if constexpr ( std::is_same_v<R, void> )
+            {
+                (cls->*funcPtr) ( std::forward<Vs> ( vs )... );
+                return {};
+            } else
+            {
+                // already returning desired return value so just call the function
+                return (cls->*funcPtr) ( std::forward<Vs> ( vs )... );
+            }
+        }
+    };
+
+    class dabInterface
+    {
+        std::function< void(jsonElement const &) > publishCallback;
+
+    public:
+        virtual ~dabInterface () = default;
+
+        virtual jsonElement dispatch ( jsonElement const &json ) = 0;
+
+        void setPublishCallback ( decltype ( publishCallback) cb )
+        {
+            publishCallback = std::move(cb);
+        }
+
+        virtual void publish ( jsonElement const &elem )
+        {
+            (publishCallback) ( elem );
+        }
+
+        virtual std::vector<std::string> getTopics ()
+        {
+            return {};
+        }
+    };
+
+    template< typename T >
+    class dabClient : public dabInterface
+    {
+        const std::string protocolVersion = "2.0";        // version of the DAB protocol being implemented
+
+        // this is an XMACRO list of def() macro's.   It contains the dab method name, the name of the method to call and to arrays of fixed and optional parameters defined as string literals
+        // NOTE: multiple fixed or optional parameters need to be enclosed in ()   this is a preprocessor limitation, it will work just fine if you do this
+#define METHODS \
+            def( "/operations/list", opList, opList, {}, {} )                                                                                       \
+            def( "/applications/list", appList, appList, {}, {} )                                                                                   \
+            def( "/applications/launch", appLaunch, appLaunch, {"appId"}, {"parameters"} )                                                          \
+            def( "/applications/launch-with-content", appLaunchWithContent, appLaunchWithContent, ({ "appId", "contentId" }), { "parameters" } )    \
+            def( "/applications/get-state", appGetState, appGetState, { "appId" }, {} )                                                             \
+            def( "/applications/exit", appExit, appExit, {"appId"}, {"force"} )                                                                     \
+            def( "/device/info", deviceInfo, deviceInfo, {}, {} )                                                                                   \
+            def( "/system/restart", systemRestart, systemRestart, {}, {} )                                                                          \
+            def( "/system/settings/list", systemSettingsList, systemSettingsList, {}, {} )                                                          \
+            def( "/system/settings/get", systemSettingsGet, systemSettingsGet, {}, {} )                                                             \
+            def( "/system/settings/set", systemSettingsSet, systemSettingsSet, { "settings" }, {} )                                                 \
+            def( "/input/key/list", inputKeyList, inputKeyList, {}, {} )                                                                            \
+            def( "/input/key-press", inputKeyPress, inputKeyPress, { "keyCode"}, {} )                                                               \
+            def( "/input/long-key-press", inputKeyLongPress, inputKeyLongPress, ({ "keyCode", "durationsMs" }), {} )                                \
+            def( "/output/image", outputImage, outputImage, {}, {} )                                                                                \
+            def( "/device-telemetry/start", deviceTelemetry, deviceTelemetryStartInternal, ({ "duration", "topic" }), {} )                                     \
+            def( "/device-telemetry/stop", deviceTelemetry, deviceTelemetryStopInternal, {}, {} )                                                   \
+            def( "/app-telemetry/start", appTelemetry, appTelemetryStartInternal, ({ "appId", "duration", "topic" }), {} )                                   \
+            def( "/app-telemetry/stop", appTelemetry, appTelemetryStopInternal, {"appId"}, {} )                                                     \
+            def( "/health-check/get", healthCheckGet, healthCheckGet, { }, {} )                                                                     \
+            def( "/voice/list", voiceList, voiceList, { }, {} )                                                                                     \
+            def( "/voice/list", voiceSet, voiceSet, { "voiceSystem" }, {} )                                                                         \
+            def( "/voice/send-audio", voiceSendAudio, voiceSendAudio, { "fileLocation" }, {"voiceSystem" } )                                        \
+            def( "/voice/send-audio", voiceSendText, voiceSendText, { "requestText" }, {"voiceSystem" } )                                           \
+            def( "/voice/send-text", voiceList, voiceList, { }, {} )                                                                                \
+            def( "/discovery", discovery, discovery, { }, {} )                                                                                      \
+            def( "/version", version, version, { }, {} )
+
+        std::map<std::string, std::pair<std::unique_ptr<dispatcher<T>>, bool>> dispatchMap;
+        std::string deviceId;
+
+        std::mutex telemetryAccess;
+        std::condition_variable telemetryCondition;
+
+        class telemetryExecutor
+        {
+        public:
+            virtual ~telemetryExecutor () = default;
+
+            virtual std::chrono::time_point<std::chrono::steady_clock> getNextScheduledTime ()
+            {
+                return std::chrono::steady_clock::now ();
+            }
+
+            virtual jsonElement getTelemetry ()
+            {
+                return {};
+            }
+
+            virtual void setInterval ( std::chrono::milliseconds newInterval )
+            {}
+        };
+
+        template< typename F >
+        class telemetry : public telemetryExecutor
+        {
+            std::chrono::milliseconds interval;
+            F callback;
+        public:
+            virtual ~telemetry () = default;
+
+            telemetry ( std::chrono::milliseconds interval, F getTelemetryCallback ) : interval ( interval ), callback ( getTelemetryCallback )
+            {
+            }
+
+            std::chrono::time_point<std::chrono::steady_clock> getNextScheduledTime () override
+            {
+                return std::chrono::steady_clock::now () + interval;
+            }
+
+            jsonElement getTelemetry () override
+            {
+                return callback ();
+            }
+            void setInterval ( std::chrono::milliseconds newInterval ) override
+            {
+                interval = newInterval;
+            }
+        };
+
+        std::map<std::chrono::time_point<std::chrono::steady_clock>, std::tuple<std::string, std::string, std::unique_ptr<telemetryExecutor> >> telemetryScheduler;
+
+        template< typename F >
+        void addTelemetry ( std::chrono::milliseconds interval, std::string const &id, std::string const &topic, F getTelemetryCallback )
+        {
+            std::lock_guard l1 ( telemetryAccess );
+
+            for ( auto it = telemetryScheduler.begin(); it != telemetryScheduler.end(); it++ )
+            {
+                if ( std::get<0>(it->second) == id )
+                {
+                    std::get<2>(it->second).get()->setInterval ( interval );
+                    telemetryCondition.notify_all ();
+                    return;
+                }
+            }
+
+
+            // schedule for NOW so we send one immediately
+            telemetryScheduler.insert ( std::move ( std::pair ( std::chrono::steady_clock::now (), std::move(std::tuple(id, topic, std::make_unique<telemetry<F>> ( interval, getTelemetryCallback ) )) )));
+            telemetryCondition.notify_all ();
+        }
+
+        void deleteTelemetry ( std::string const &id )
+        {
+            std::lock_guard l1 ( telemetryAccess );
+
+            for ( auto it = telemetryScheduler.begin(); it != telemetryScheduler.end(); it++ )
+            {
+                if ( std::get<0>(it->second) == id )
+                {
+                    /* already exists, so update the scheduled time */
+                    telemetryScheduler.erase ( it );
+                    telemetryCondition.notify_all ();
+                    return;
+                }
+            }
+        }
+
+        std::atomic<bool> exiting = false;
+
+        void telemetryTask ()
+        {
+            while ( !exiting )
+            {
+                std::unique_lock l1 ( telemetryAccess );
+                if ( telemetryScheduler.empty() )
+                {
+                    telemetryCondition.wait ( l1 );
+                } else
+                {
+                    telemetryCondition.wait_until( l1, telemetryScheduler.begin ()->first );
+                }
+
+                if ( !telemetryScheduler.empty ())
+                {
+                    if ( telemetryScheduler.begin ()->first < std::chrono::steady_clock::now ())
+                    {
+                        auto rsp = std::get<2>(telemetryScheduler.begin ()->second).get()->getTelemetry ();
+                        publish ( { { "topic", std::get<1>(telemetryScheduler.begin ()->second) }, {"payload", rsp} } );
+
+                        // extract the node entry, calculate a new key value (execution time) and reinsert (no reallocation or copying, just some pointer manipulation so this is fast
+                        auto nodeHandle = telemetryScheduler.extract ( telemetryScheduler.begin ()->first );
+                        nodeHandle.key () = std::get<2>(nodeHandle.mapped()).get()->getNextScheduledTime ();
+                        telemetryScheduler.insert ( std::move(nodeHandle) );
+                    }
+                }
+            }
+        }
+
+    public:
+
+        std::thread  taskId;
+
+        explicit dabClient ( std::string const &deviceId ) : deviceId ( deviceId )
+        {
+            // XMACRO instantiation of our list of method names, methods and fixed and optional parameters
+            // this is resolved into a map of method name and a pair of unique pointers to a nativeDispatcher instance and a bool indicating if the method was overridden by the instantiating class (must be done using CRTP)
+#define def( methName, detectFunc, callFunc, fixedParams, optionalParams )                                                                                                                                                                                            \
+                {                                                                                                       \
+                    auto disp = std::make_unique<nativeDispatch<std::initializer_list<char const *>fixedParams.size (), std::initializer_list<char const *>optionalParams.size (), T, decltype(&T::callFunc)>> ( &T::callFunc, std::vector<std::string_view> fixedParams, std::vector<std::string_view> optionalParams );   \
+                    auto p1 = std::make_pair ( std::move ( disp ), !std::is_same_v<decltype(&dabClient::detectFunc), decltype(&T::detectFunc)> || !strcmp ( "/operations/list", (methName) ) || !strcmp ( "/version", (methName) ) );                                    \
+                    auto p2 = std::make_pair ( std::string ( "dab/" ) + deviceId + (methName), std::move ( p1 ) );                                                                                                                                            \
+                    dispatchMap.insert ( std::move ( p2) );                                                                                                                                                                                                    \
+                }
+            METHODS
+
+            taskId = std::thread ( &dabClient::telemetryTask, this );
+        }
+
+        std::vector<std::string> getTopics () override
+        {
+            std::vector<std::string> topics;
+            for ( auto const &it: dispatchMap )
+            {
+                if ( it.second.second )
+                {
+                    // return operation, but trim off leading dab/<deviceId>/
+                   topics.push_back ( it.first );
+                }
+            }
+            return topics;
+        }
+
+        ~dabClient () override
+        {
+            exiting = true;
+            telemetryCondition.notify_all();
+            taskId.join();
+        }
+        // this is our implementation of opList.   It uses the overridden bool to specify if the operation is supported and only returns operations that the client supports
+        jsonElement opList ()
+        {
+            jsonElement elem;
+            for ( auto const &it: dispatchMap )
+            {
+                if ( it.second.second )
+                {
+                    // return operation, but trim off leading dab/<deviceId>/
+                    elem["operations"].push_back ( std::string ( it.first.c_str() + it.first.find ( '/', it.first.find ( '/' ) + 1 ) + 1 ) );
+                }
+            }
+            return elem;
+        }
+
+        // returns the currently supported protocol version
+        jsonElement version ()
+        {
+            jsonElement elem;
+            elem["versions"].push_back ( protocolVersion );
+            return elem;
+        }
+
+        jsonElement deviceTelemetryStartInternal ( int64_t durationMs, std::string const &topic )
+        {
+            if constexpr ( std::is_member_function_pointer_v<decltype ( &T::deviceTelemetry )> )
+            {
+                addTelemetry ( std::chrono::milliseconds ( durationMs ), "", std::string ( "dab/" ) + deviceId + "/device-telemetry/metrics" , [=, this] () { return (static_cast<T*>(this)->*(&T::deviceTelemetry )) (  ); } );
+                return {{"duration", durationMs}};
+            } else
+            {
+                throw dabException ( 400, "device telemetry not supported" );
+            }
+        }
+
+        jsonElement deviceTelemetryStopInternal ()
+        {
+            deleteTelemetry ( "" );
+            return {};
+        }
+
+        jsonElement appTelemetryStartInternal ( std::string const &appId, int64_t durationMs, std::string const &responseTopic )
+        {
+            if constexpr ( std::is_member_function_pointer_v<decltype ( &T::appTelemetry )> )
+            {
+                addTelemetry ( std::chrono::milliseconds ( durationMs ), appId, std::string ( "dab/" ) + deviceId + "/app-telemetry/metrics/" + appId , [=, this] () { return (static_cast<T*>(this)->*(&T::appTelemetry )) ( appId ); } );
+                return {{"duration", durationMs}};
+            } else
+            {
+                throw dabException ( 400, "app telemetry not supported" );
+            }
+        }
+
+        jsonElement appTelemetryStopInternal ( std::string const &appId )
+        {
+            deleteTelemetry ( appId );
+            return {};
+        }
+
+        // our main dispatch entry point.
+        jsonElement dispatch ( jsonElement const &elem ) override
+        {
+            jsonElement rsp;
+            try
+            {
+                if ( elem.has ( "topic" ) and elem.has ( "responseTopic" ) )
+                {
+                    std::string topic = elem["topic"];
+                    std::string responseTopic = elem["responseTopic"];
+                    std::string corData = elem.has ( "correlationData" ) ? elem["correlationData"] : "";
+
+                    auto it = dispatchMap.find ( topic );
+                    if ( it != dispatchMap.end ())
+                    {
+                        rsp["payload"] = (*it->second.first) ( static_cast<T *>(this), elem );
+                    }
+                    rsp["topic"] = responseTopic;
+                    if ( !corData.empty ())
+                    {
+                        rsp["correlationData"] = corData;
+                    }
+                    if ( !rsp["payload"].has ( "status" ))
+                    {
+                        rsp["payload"]["status"] = 200;
+                    }
+                } else
+                {
+                    rsp["payload"]["status"] = 400;
+                    rsp["payload"]["error"] = "malformed request";
+                }
+            } catch ( std::pair<int, std::string> &e )
+            {
+                rsp["payload"]["status"] = e.first;
+                rsp["payload"]["error"] = e.second;
+            } catch ( std::pair<int, char const *> &e )
+            {
+                rsp["payload"]["status"] = e.first;
+                rsp["payload"]["error"] = e.second;
+            } catch ( dabException &e )
+            {
+                rsp["payload"]["status"] = e.errorCode;
+                rsp["payload"]["error"] = e.errorText;
+            } catch ( ... )
+            {
+                rsp["payload"]["status"] = 400;
+                rsp["payload"]["error"] = "unable to parse request";
+            }
+            return rsp;
+        }
+
+        /* support function to execute a system command and return the results */
+        std::string execCmd ( std::string const &cmd )
+        {
+            try
+            {
+                int retCode = 0;
+                std::string output;
+
+                auto close = [&retCode] ( FILE *file ) {
+#ifdef _WIN32
+                    retCode = _pclose ( file );
+#else
+                    retCode = pclose ( file );
+#endif
+                };
+
+#ifdef _WIN32
+                std::unique_ptr<FILE, decltype(close)> pipe ( _popen ( cmd.c_str (), "r" ), close );
+#else
+                std::unique_ptr<FILE, decltype ( close )> pipe ( popen ( cmd.c_str (), "r" ), close );
+#endif
+                if ( !pipe )
+                {
+                    throw std::runtime_error ( "popen() failed!" );
+                }
+
+                char tmpBuff[4096];
+                while ( fgets ( tmpBuff, sizeof (tmpBuff), pipe.get ()) != nullptr )
+                {
+                    output += tmpBuff;
+                }
+                return output;
+            } catch ( ... )
+            {
+                throw dabException{500, std::string ( "executing command \"" ) + cmd + "\" returned error " + std::to_string (errno)};
+            }
+        }
+
+        /*
+            DAB METHODS
+
+            These functions are place-holder/prototypes used in the meta-template paramter deduction above.
+            The opList will detect if these functions have been overridden by the users DAB class and only emit operations that have been overridden
+        */
+
+        jsonElement appList ()
+        {
+            throw dabException{501, "unsupported"};
+        }
+
+        jsonElement appLaunch ( std::string const &appId, jsonElement const &elem )
+        {
+            throw dabException{501, "unsupported"};
+        }
+
+        jsonElement appLaunchWithContent ( std::string const &appId, std::string const &contentId, jsonElement const &elem )
+        {
+            throw dabException{501, "unsupported"};
+        }
+
+        jsonElement appGetState ( std::string const &appId )
+        {
+            throw dabException{501, "unsupported"};
+        }
+
+        jsonElement appExit ( std::string const &appId, bool force )
+        {
+            throw dabException{501, "unsupported"};
+        }
+
+        jsonElement deviceInfo ()
+        {
+            throw dabException{501, "unsupported"};
+        }
+
+        jsonElement systemRestart ()
+        {
+            throw dabException{501, "unsupported"};
+        }
+
+        jsonElement systemSettingsList ()
+        {
+            throw dabException{501, "unsupported"};
+        }
+
+        jsonElement systemSettingsGet ()
+        {
+            throw dabException{501, "unsupported"};
+        }
+
+        jsonElement systemSettingsSet ( jsonElement const &elem )
+        {
+            throw dabException{501, "unsupported"};
+        }
+
+        jsonElement inputKeyList ()
+        {
+            throw dabException{501, "unsupported"};
+        }
+
+        jsonElement inputKeyPress ( std::string const & )
+        {
+            throw dabException{501, "unsupported"};
+        }
+
+        jsonElement inputKeyLongPress ( std::string const &keyCode, int64_t durationMs )
+        {
+            throw dabException{501, "unsupported"};
+        }
+
+        jsonElement outputImage ()
+        {
+            throw dabException{501, "unsupported"};
+        }
+
+        jsonElement deviceTelemetry ()
+        {
+            throw dabException{501, "unsupported"};
+        }
+
+        jsonElement appTelemetry ( std::string const &appId )
+        {
+            throw dabException{501, "unsupported"};
+        }
+
+        jsonElement healthCheckGet ()
+        {
+            throw dabException{501, "unsupported"};
+        }
+
+        jsonElement voiceList ()
+        {
+            throw dabException{501, "unsupported"};
+        }
+
+        jsonElement voiceSet ( jsonElement const &voiceSystem )
+        {
+            throw dabException{501, "unsupported"};
+        }
+
+        jsonElement voiceSendAudio ( std::string const &fileLocation, std::string const &voiceSystem )
+        {
+            throw dabException{501, "unsupported"};
+        }
+
+        jsonElement voiceSendText ( std::string const &requestText, std::string const &voiceSystem )
+        {
+            throw dabException{501, "unsupported"};
+        }
+
+        jsonElement discovery ()
+        {
+            throw dabException{501, "unsupported"};
+        }
+    };
+};
