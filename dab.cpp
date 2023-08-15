@@ -232,17 +232,27 @@ public:
     }
 };
 
-int main ()
+int main ( int argc, char *argv[] )
 {
     // dabBridge takes a list of class types
     DAB::dabBridge<dab_panel, dab_basic1, dab_basic2> bridge;
 
-    // this instantiates a particular class based on it's name.   It takes the deviceID to associate that instance with
-    bridge.makeDeviceInstance ( "1234", "127.0.0.3" );
-    bridge.makeDeviceInstance ( "abcd", "127.0.0.1" );
-    bridge.makeDeviceInstance ( "efgh", "127.0.0.2" );
+    if ( argc != 4 )
+    {
+        std::cout << "usage dab <mqtt broker> <deviceId> <ipAddress>" << std::endl;
+        return 0;
+    }
 
-    auto mqtt = dabMQTTInterface ( bridge, "test.mosquitto.org:1883" );
+    if ( argc == 2 )
+    {
+        // this instantiates a particular class based on it's name.   It takes the deviceID to associate that instance with
+        bridge.makeDeviceInstance ( argv[2], argv[3] );
+    } else
+    {
+//        bridge.makeDeviceInstance ( argv[1] );
+    }
+
+    auto mqtt = dabMQTTInterface ( bridge, argv[1] );
 
     mqtt.connect ();
     mqtt.wait ();
