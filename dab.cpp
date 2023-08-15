@@ -31,7 +31,8 @@ public:
 
     static bool isCompatible ( char const *ipAddress )
     {
-        return !strcmp ( ipAddress, "127.0.0.3" );
+	return true;
+        //return !strcmp ( ipAddress, "127.0.0.3" );
     }
 
     jsonElement systemSettingsGet ()
@@ -235,7 +236,7 @@ public:
 int main ( int argc, char *argv[] )
 {
     // dabBridge takes a list of class types
-    DAB::dabBridge<dab_panel, dab_basic1, dab_basic2> bridge;
+    DAB::dabBridge<dab_panel> bridge;
 
     if ( argc != 4 )
     {
@@ -243,7 +244,7 @@ int main ( int argc, char *argv[] )
         return 0;
     }
 
-    if ( argc == 2 )
+    if ( argc == 4 )
     {
         // this instantiates a particular class based on it's name.   It takes the deviceID to associate that instance with
         bridge.makeDeviceInstance ( argv[2], argv[3] );
