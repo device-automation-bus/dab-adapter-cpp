@@ -199,7 +199,7 @@ public:
     }
     jsonElement discovery ()
     {
-v		throw std::pair ( 403, "not found" );
+		throw std::pair ( 403, "not found" );
     }
 #endif
 };
