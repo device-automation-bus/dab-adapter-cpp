@@ -43,12 +43,29 @@ namespace DAB
 
         virtual ~dabBridge() = default;
 
+        std::function< void(jsonElement const &) > publishCallback;
+
         // main topic dispatch entry point.   It extracts the topic, removes the dab/<device_id>/ portion and tries to find it in our map.  If it is there
         // it will dispatch against the stored dispatcher (which will build the parameter lists from the passed in json and then call the specified class method
         virtual jsonElement dispatch( jsonElement const &json ) {
             if (json.has("topic")) {
                 std::string const &topic = json["topic"];
-                if (topic.starts_with("dab/")) {
+
+                if ( topic == "dab/discovery")
+                {
+                    // we may have multiple devices and each one needs to send a response.   However, we can only return one response.
+                    // so we'll instead, iterate through the second device and call publishCallback
+                    auto it = instances.begin();
+                    it++;
+                    for ( ; it != instances.end(); it++ )
+                    {
+                        auto &[name, value] = *it;
+                        publishCallback ( it->second->dispatch ( json ) );
+                    }
+                    // return as a response our first class's response
+                    return instances.begin()->second->dispatch ( json );
+                } else if (topic.starts_with("dab/"))
+                {
                     auto slashPos = std::string_view(topic.begin() + 4, topic.end()).find_first_of('/');
                     if (slashPos == std::string::npos) {
                         throw DAB::dabException ( 400, "topic is malformed" );
@@ -80,6 +97,7 @@ namespace DAB
                 auto newTopics = instance.second->getTopics();
                 topics.insert ( topics.end(), newTopics.begin(), newTopics.end() );
             }
+            topics.push_back( "dab/discovery");
             return topics;
         }
 
@@ -91,6 +109,7 @@ namespace DAB
             {
                 it.second->setPublishCallback( f );
             }
+            publishCallback = f;
         }
 
         // makeInstance will instantiate a dabInterface object.  It will iterate through all types and call the static member function isCompatible( <params>...)

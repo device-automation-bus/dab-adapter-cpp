@@ -120,7 +120,7 @@ public:
     jsonElement appTelemetry ( std::string const &appId )
     {
         // example return
-        return { "app-status:", "all systems nominal" };
+        return { "app-status:", std::string ( "all systems nominal for " ) + appId };
     }
 
     // these are the prototypes for the currently unsupported operations
@@ -203,7 +203,6 @@ public:
     }
 #endif
 };
-
 
 int main ( int argc, char *argv[] )
 {

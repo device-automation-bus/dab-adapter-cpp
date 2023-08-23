@@ -430,6 +430,14 @@ namespace DAB
                 }
             METHODS
 
+            // dab/discovery.   special as it doesn't have deviceID
+            {                                                                                                       \
+                    auto disp = std::make_unique<nativeDispatch<0, 0, T, decltype(&T::discovery)>> ( &T::discovery, std::vector<std::string_view> {}, std::vector<std::string_view> {} );   \
+                    auto p1 = std::make_pair ( std::move ( disp ), false );                                    \
+                    auto p2 = std::make_pair ( std::string ( "dab/discovery" ), std::move ( p1 ) );                                                                                                                                            \
+                    dispatchMap.insert ( std::move ( p2) );                                                                                                                                                                                                    \
+            }
+
             telemetryThreadId = std::thread ( &dabClient::telemetryTask, this );
         }
 
@@ -480,15 +488,21 @@ namespace DAB
             return elem;
         }
 
+        // returns the currently supported protocol version
+        jsonElement discovery ()
+        {
+            jsonElement elem;
+            return elem;
+        }
         // this is the internal implementation for deviceTelemetryStart.  This is NOT the override for the users telemetry call
         //    this function takes the duration and sets up the calls to the appropriate telemetry method.  That method id described
         //    lower down in the codebase
-        jsonElement deviceTelemetryStartInternal ( int64_t durationMs, std::string const &topic )
+        jsonElement deviceTelemetryStartInternal ( int64_t durationMs, std::string const & )
         {
             if constexpr ( std::is_member_function_pointer_v<decltype ( &T::deviceTelemetry )> )
             {
                 // construct the topic to publish on and add the telemetry with the lambda that calls the deviceTelemetry() method (which is what the user needs to implement)
-                addTelemetry ( std::chrono::milliseconds ( durationMs ), "", std::string ( "dab/" ) + deviceId + "/device-telemetry/metrics" , [=, this] () { return (static_cast<T*>(this)->*(&T::deviceTelemetry )) (  ); } );
+                addTelemetry ( std::chrono::milliseconds ( durationMs ), "", std::string ( "dab/" ) + deviceId + "/device-telemetry/metrics" , [this] () { return (static_cast<T*>(this)->*(&T::deviceTelemetry )) (  ); } );
                 return {{"duration", durationMs}};
             } else
             {
@@ -506,12 +520,12 @@ namespace DAB
         // this is the internal implementation for applicationTelemetryStart.  This is NOT the override for the users telemetry call
         //    this function takes the duration and sets up the calls to the appropriate telemetry method.  That method id described
         //    lower down in the codebase
-        jsonElement appTelemetryStartInternal ( std::string const &appId, int64_t durationMs, std::string const &responseTopic )
+        jsonElement appTelemetryStartInternal ( std::string const &appId, int64_t durationMs, std::string const & )
         {
             if constexpr ( std::is_member_function_pointer_v<decltype ( &T::appTelemetry )> )
             {
                 // construct the topic to publish on and add the telemetry with the lambda that calls the appTelemetry() method (which is what the user needs to implement)
-                addTelemetry ( std::chrono::milliseconds ( durationMs ), appId, std::string ( "dab/" ) + deviceId + "/app-telemetry/metrics/" + appId , [=, this] () { return (static_cast<T*>(this)->*(&T::appTelemetry )) ( appId ); } );
+                addTelemetry ( std::chrono::milliseconds ( durationMs ), appId, std::string ( "dab/" ) + deviceId + "/app-telemetry/metrics/" + appId , [this, appId] () { return (static_cast<T*>(this)->*(&T::appTelemetry )) ( appId ); } );
                 return {{"duration", durationMs}};
             } else
             {
@@ -727,11 +741,6 @@ namespace DAB
         }
 
         jsonElement voiceSendText ( std::string const &requestText, std::string const &voiceSystem )
-        {
-            throw dabException{501, "unsupported"};
-        }
-
-        jsonElement discovery ()
         {
             throw dabException{501, "unsupported"};
         }

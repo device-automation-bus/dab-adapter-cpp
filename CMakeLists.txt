@@ -6,7 +6,6 @@ set(PAHO_BUILD_STATIC TRUE)
 set(CMAKE_PREFIX_PATH vcpkg_installed/x64-osx)
 
 add_executable( DAB dab.cpp
-                Json.cpp
                 Json.h
                 dabBridge.h
                 dabClient.h
