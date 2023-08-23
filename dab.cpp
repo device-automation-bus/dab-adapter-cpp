@@ -31,12 +31,13 @@ public:
 
     static bool isCompatible ( char const *ipAddress )
     {
-	return true;
-        //return !strcmp ( ipAddress, "127.0.0.3" );
+        // should connect to device specified in ipAddress and see if this class is capable of managing that device
+	    return true;
     }
 
     jsonElement systemSettingsGet ()
     {
+        // an example of how to return json data
         return {{"status",                200},
                 {"language",              "en-US"},
                 {"outputResolution",      {{"width", 3840}, {"height", 2160}, {"frequency", 60}}},
@@ -58,7 +59,7 @@ public:
     {
         jsonElement rsp;
 
-        rsp["applications"].makeArray ();
+        rsp["applications"].makeArray ();           // rsp will be an object with "applications" : []
 #ifdef _WIN32
         std::string output = execCmd ( "taskList /NH /Fo CSV" );
 
@@ -77,7 +78,7 @@ public:
                 {
                     it++;
                 }
-                rsp["applications"].push_back ( taskName );
+                rsp["applications"].push_back ( taskName );     // push our task name to the end of the applications array
                 while ( it != output.cend () && *it != '\n' )
                 {
                     it++;
@@ -98,23 +99,27 @@ public:
 
     jsonElement appLaunchWithContent ( std::string const &appId, std::string const &contentId, jsonElement const &elem )
     {
+        // example return
         return {{"status", 200},
                 {"state",  "launched"}};
     }
 
     jsonElement deviceInfo ()
     {
+        // example return
         return {{"status",  200},
                 {"version", "2.0"}};
     }
 
     jsonElement deviceTelemetry ()
     {
+        // example exception
         throw DAB::dabException{501, "unsupported"};
     }
 
     jsonElement appTelemetry ( std::string const &appId )
     {
+        // example return
         return { "app-status:", "all systems nominal" };
     }
 
