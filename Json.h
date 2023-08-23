@@ -33,7 +33,7 @@ class jsonElement
 	public:
 	typedef  std::map<std::string, jsonElement, std::less<>> objectType;
 	typedef  std::vector <jsonElement> arrayType;
-	inline static struct {} array{};
+	inline static struct {} array{};            // this is used to force an indeterminate { "a, "b" } to be processed as an array and not as an object
 
 	private:
 
@@ -80,6 +80,12 @@ class jsonElement
 		}
 	}
 
+    // the constructor takes an initializer list
+    //     if it's a fundamental value (int64_t, bool, double, std::string} it simply creates a jsonElement that holds that type
+    //     if it's an object of type { "name", "value" } it interprets this as a name value pair and adds this to the surrounding object;
+    //     if it's a list of more than two values, it is interpreted as an array.   Alternately if it is two values exactly, an array
+    //     can be declared as { jsonElement::array(), "one", "two" }   If a jsonElement::array() is detected it is treated as a flag
+    //     and does not become part of the json data
 	jsonElement( std::initializer_list<jsonElement> i )
 	{
 		if ( i.size() == 2 )
@@ -122,6 +128,7 @@ class jsonElement
 			auto &arr = std::get<arrayType>( value );
 			for ( auto &it : i )
 			{
+                // if it's of type array() ignore the value.  This is just to indicate that we process as an array and not as an object
 				if ( !std::holds_alternative<decltype (array)>( it.value ) )
 				{
 					arr.push_back( it );
@@ -130,11 +137,12 @@ class jsonElement
 		}
 	}
 
+    // initializer for an associative container.
 	template <class T, typename std::enable_if_t<is_associative_container<T, T>::value> * = nullptr >
 	jsonElement( T const &o ) : value( objectType( o.cbegin(), o.cend() ) )
 	{}
 
-	// for array... needs to have a vector type of <jsonElement>
+	// initializer for an array
 	template <class T, typename std::enable_if_t<is_sequence_container<T, T, T>::value> * = nullptr>
 	jsonElement( T const &a ) : value( arrayType( a.cbegin(), a.cend() ) )
 	{}
@@ -166,22 +174,26 @@ class jsonElement
 
 	jsonElement( char const **str );
 
+    //move constructor
 	jsonElement( jsonElement &&old ) noexcept
 	{
 		*this = std::move( old );
 	}
 
+    // copy constructor
 	jsonElement( jsonElement const &old )
 	{
 		value = old.value;
 	}
 
+    // copy operator
 	jsonElement &operator = ( jsonElement const &old )
 	{
 		value = old.value;
 		return *this;
 	}
 
+    // move operator
 	jsonElement &operator = ( jsonElement &&old ) noexcept
 	{
 		// free it an initialize it to the old type and copy old into us
@@ -189,6 +201,7 @@ class jsonElement
 		return *this;
 	}
 
+    // assignment operator for arithmetic types (bool, int, double)
 	template <class T, typename std::enable_if_t<((std::is_arithmetic_v<T> || std::is_enum_v<T>)) && !std::is_same_v<jsonElement, typename std::remove_cvref_t<T>::type>> * = nullptr>
 	jsonElement &operator = ( T const &v )
 	{
@@ -208,6 +221,7 @@ class jsonElement
 		return *this;
 	}
 
+    // assignment operator for strings or string convertibles
 	template <class T, typename std::enable_if_t<!std::is_arithmetic_v<T> && !std::is_enum_v<T> > * = nullptr>
 	jsonElement &operator = ( T const &v )
 	{
@@ -215,7 +229,9 @@ class jsonElement
 		return *this;
 	}
 
-	// ----------------------------------------------- writer functions
+	// ----------------------------------------------- assignment methods
+
+    // this returns a reference to an object with property name.     obj[std::string("name")]
 	template < typename T, typename std::enable_if_t<std::is_same_v<T, std::string_view>> * = nullptr>
 	jsonElement &operator [] ( T const &name )
 	{
@@ -226,6 +242,7 @@ class jsonElement
 		auto &obj = std::get<objectType>( value );
 		return obj[name];
 	}
+    // same as above except we take in a const char * as name rather than a std::string
 	template < typename T, typename std::enable_if_t<std::is_same_v<T, const char *>> * = nullptr>
 	jsonElement &operator [] ( T name )
 	{
@@ -236,6 +253,7 @@ class jsonElement
 		auto &obj = std::get<objectType>( value );
 		return obj[std::string( name )];
 	}
+    // array dereference operator, returns a reference to the <index> element (0-based).    obj[<index>]
 	template < typename T, typename std::enable_if_t<std::is_integral_v<T>> * = nullptr>
 	jsonElement &operator [] ( T index )
 	{
@@ -254,6 +272,7 @@ class jsonElement
 		}
 		return arr[index];
 	}
+    // allows for emplacement of a new value for an array jsonElement
 	template < typename ...T>
 	void emplace_back( T && ...t )
 	{
@@ -265,15 +284,17 @@ class jsonElement
 		arr.emplace_back( std::forward<T...>( t... ) );
 	}
 
-	operator bool();
-	operator int64_t ();
-	operator double();
-	operator std::string ();
+	operator bool &();
+	operator int64_t & ();
+	operator double &();
+	operator std::string & ();
 
+    // resets the jsonElement to monostate (no valid state)
 	void clear()
 	{
 		value = std::monostate();
 	}
+    // turns the jsonElement into a 0-length array (we ended up with a [] being emitted upon serialization)
 	jsonElement &makeArray()
 	{
 		if ( std::holds_alternative<arrayType>( value ) )
@@ -287,6 +308,7 @@ class jsonElement
 		}
 		return *this;
 	}
+    // turns the jsonElement into an object with no elements (a {} will be emitted upon serialization)
 	jsonElement &makeObject()
 	{
 		if ( std::holds_alternative<objectType>( value ) )
@@ -300,8 +322,10 @@ class jsonElement
 		}
 		return *this;
 	}
+
 	// ------------------------------------- reader functions
 
+    // used to test to see if an object contains a specific named element
 	bool has ( std::string_view const &name ) const
 	{
 		if ( std::holds_alternative<objectType> ( value ) )
@@ -321,6 +345,7 @@ class jsonElement
 		return false;
 	}
 
+    // constant returned reference for the indexed value of a jsonElement array
 	template<typename T, typename std::enable_if_t<std::is_integral_v<T>> * = nullptr>
 	jsonElement const &operator [] ( T index ) const
 	{
@@ -336,6 +361,7 @@ class jsonElement
 		throw "element not found";
 	}
 
+    // constant returned reference for the std::string(<named>) value of the jsonElement object
 	template<typename T, typename std::enable_if_t<std::is_same_v<T, std::string_view>> * = nullptr>
 	jsonElement const &operator [] ( T const &name ) const
 	{
@@ -356,12 +382,14 @@ class jsonElement
 		throw "element not found";
 	}
 
+    // constant returned reference for the (const char *)(<named>) value of the jsonElement object
 	template<typename T, typename std::enable_if_t<std::is_same_v<T, char const *>> * = nullptr>
 	auto &operator [] ( T name ) const
 	{
 		return (*this)[std::string_view( name )];
 	}
 
+    // push a value to the back of a jsonElement array
 	void push_back( jsonElement const &elem )
 	{
 		makeArray();
@@ -369,6 +397,7 @@ class jsonElement
 		arr.push_back( elem );
 	}
 
+    // reserve size elements in the jsonElement array
 	jsonElement &reserve( size_t size )
 	{
 		if ( std::holds_alternative<arrayType>( value ) )
@@ -386,6 +415,7 @@ class jsonElement
 		return *this;
 	}
 
+    // constant begin iterator for jsonElement object
 	auto cbeginObject() const
 	{
 		if ( std::holds_alternative<objectType>( value ) )
@@ -396,6 +426,7 @@ class jsonElement
 		throw "json iterating over not object";
 	}
 
+    // constant end iterator for jsonElementObject
 	auto cendObject() const
 	{
 		if ( std::holds_alternative<objectType>( value ) )
@@ -406,6 +437,7 @@ class jsonElement
 		throw "json iterating over not object";
 	}
 
+    // constant begin iterator for jsonElement array
 	auto cbeginArray() const
 	{
 		if ( std::holds_alternative<arrayType>( value ) )
@@ -415,6 +447,8 @@ class jsonElement
 		}
 		throw "json iterating over non array";
 	}
+
+    // constant end iterator for jsonElement array
 	auto cendArray() const
 	{
 		if ( std::holds_alternative<arrayType>( value ) )
@@ -425,12 +459,15 @@ class jsonElement
 		throw "json iterating over non array";
 	}
 
+    // prototype for the value accessors
 	operator bool const () const;
 	operator int64_t const () const;
 	operator double const () const;
 	operator std::string  const &() const;
 
 	size_t size() const;
+
+    // testers.  pretty self-explanatory
 	bool isNull() const
 	{
 		if ( std::holds_alternative<std::monostate>( value ) )
@@ -503,6 +540,7 @@ class jsonElement
 	}	// ------------------------------- serialization
 	void serialize( std::string &buff, bool quoteNames = false ) const;
 
+    // helper methods for the json parser
 	static bool isSpace ( char const c )
 	{
 		if ( (c == ' ') || (c == '\t') or (c == '\r') or (c == '\n') )
@@ -547,8 +585,6 @@ class jsonElement
 		}
 		return false;
 	}
-
-
 };
 
 extern jsonElement jsonParser( char const *str );

@@ -118,6 +118,10 @@ public:
         return { "app-status:", "all systems nominal" };
     }
 
+    // these are the prototypes for the currently unsupported operations
+    // to start receiving callbacks simply uncomment out any of the handlers you wish to receive calls for
+    // the library will detect the fact that there is now a handler defined, add it to the dab/<deviceid>/oplist response
+    // and begin routing request automatically.  Nothing else needs be done.
 #if 0
     jsonElement deviceInfo ()
     {
@@ -195,43 +199,6 @@ v		throw std::pair ( 403, "not found" );
 #endif
 };
 
-class dab_basic1 : public DAB::dabClient<dab_basic1>
-{
-public:
-
-    dab_basic1 ( std::string deviceId, std::string ipAddress ) : dabClient ( deviceId )
-    {}
-
-    static bool isCompatible ( char const *ipAddress )
-    {
-        return !strcmp ( ipAddress, "127.0.0.1" );
-    }
-
-    jsonElement deviceInfo ()
-    {
-        return {{"status",  200},
-                {"version", "2.1"}};
-    }
-};
-
-class dab_basic2 : public DAB::dabClient<dab_basic2>
-{
-public:
-
-    dab_basic2 ( std::string deviceId, std::string ipAddress ) : dabClient ( deviceId )
-    {}
-
-    static bool isCompatible ( char const *ipAddress )
-    {
-        return !strcmp ( ipAddress, "127.0.0.2" );
-    }
-
-    jsonElement deviceInfo ()
-    {
-        return {{"status",  200},
-                {"version", "2.1"}};
-    }
-};
 
 int main ( int argc, char *argv[] )
 {
@@ -244,18 +211,18 @@ int main ( int argc, char *argv[] )
         return 0;
     }
 
-    if ( argc == 4 )
-    {
-        // this instantiates a particular class based on it's name.   It takes the deviceID to associate that instance with
-        bridge.makeDeviceInstance ( argv[2], argv[3] );
-    } else
-    {
-//        bridge.makeDeviceInstance ( argv[1] );
-    }
+    // this instantiates a particular class based.  It takes <deviceId> as the first parameter and the <ipAddress>
+    // of the device as the second parameter
+    bridge.makeDeviceInstance ( argv[2], argv[3] );
 
+    // this creates the mqtt interface.  It takes the bridge and the ip address of the mqtt broker
     auto mqtt = dabMQTTInterface ( bridge, argv[1] );
 
+    // this connects the mqtt interface to the mqtt broker
     mqtt.connect ();
+
+    // wait forever or until the connection with the broker is finished
+    // a user can call mqtt.disconnect() to gracefully exit.
     mqtt.wait ();
 }
 

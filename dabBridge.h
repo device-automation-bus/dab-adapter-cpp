@@ -20,12 +20,21 @@
 
 namespace DAB
 {
-	// typelist should be a list of types inheriting from dabClient (which itself inherits from dabInterface which is the base class we're interested in)
+
+    // the daBridge template serves as the main <deviceId> switching dispatch entry point.
+    // it takes a list of class types, each of which must support a static isCompatible method to determine if that class can handle the specified device
+    // Instances of the handler object are created by issuing a makeInstance( <deviceId>[, <ipAddress>, [<params...>]] ) call
+    // the object created is will be routed any calls destined for the specified <deviceId>
+    // the <ipAddress> is optional in this call.  If it is left out, the first type on in the type list will be instantiated.  This is the "on-device" mode.   If multiple
+    // on-device classes are possible, simply pass in a value to be call their isCompatible method.
+    // <ipAddress> and <params...> are type agnostic, however isCompatible is defined in bridge mode to take a string containing the ipAddress of the end-device.
+
+	// type list should be a list of types inheriting from dabClient (which itself inherits from dabInterface which is the base class we're interested in)
 	template<typename ... C>
 	class dabBridge {
         std::map<std::string, std::unique_ptr<dabInterface>, std::less<>> instances;
 
-        // typelist for our metaprogram below
+        // type list for our meta-program below
         template<class ...>
         struct types {
         };
@@ -34,6 +43,8 @@ namespace DAB
 
         virtual ~dabBridge() = default;
 
+        // main topic dispatch entry point.   It extracts the topic, removes the dab/<device_id>/ portion and tries to find it in our map.  If it is there
+        // it will dispatch against the stored dispatcher (which will build the parameter lists from the passed in json and then call the specified class method
         virtual jsonElement dispatch( jsonElement const &json ) {
             if (json.has("topic")) {
                 std::string const &topic = json["topic"];
@@ -60,6 +71,7 @@ namespace DAB
             }
         }
 
+        // return a list of all operations supported by the specified class.   This is solely determined by implementation of the handler method.
         std::vector<std::string> getTopics() {
             std::vector<std::string> topics;
 
@@ -71,6 +83,7 @@ namespace DAB
             return topics;
         }
 
+        // This iterates through all the class's and sets the mqtt publish callback so that the class's can publish notifications (non-request/response)
         template<typename F>
         void setPublishCallback(F f)
         {
@@ -79,10 +92,9 @@ namespace DAB
                 it.second->setPublishCallback( f );
             }
         }
-        // makeInstance will instantiate a dabInterface object.  There can be multiple specialized classes, so each one must have a name attached to the class that can be used to specify which one.
-        // this is done using a fixed_string template paramter and a helper function getName() to retrieve the value of that parameter.   This is then used in a standard recursive tempalate
-        // to select the proper type to instantiate
 
+        // makeInstance will instantiate a dabInterface object.  It will iterate through all types and call the static member function isCompatible( <params>...)
+        // if this returns true, then the corresponding class will be instantiated and associated with the passed in device<id>
         template <typename ...VS>
         dabInterface *makeDeviceInstance ( char const *deviceId, VS  &&...vs )
         {
@@ -94,8 +106,10 @@ namespace DAB
         FIRST &getFirstParameter ( FIRST &&first, VS &&... ) {
             return first;
         }
-		// this is a recursive template that eats away one of our template type parameters at a time (HEAD).   It calls GetName() on HEAD (static method) which in turn calls the fixed_string type paramter which stors the string literal passed to it
-		// as a type parameter.   This is used as the "name" of the class and therefore we can use this name to select which of our specialized types to instantiate
+		// this is a recursive template that eats away one of our template type parameters at a time (HEAD).  It calls isCompatible on each of the classes (passing in any user-passed in
+        // parameters until one returns true (or it subsequently fails and throws an exception).   if isCompatible() returns true, that class is instantiated and the search ends.
+        //
+        // alternately, if no parameters to isCompatible() have been passed, the first class in the list will always be instantiated.  This is the on-device mode.
 		template<int dummy, class HEAD, class ... Tail, class ...VS>
 		dabInterface *makeInstances ( char const *deviceId, types<HEAD, Tail...>, VS &&...vs )
 		{
@@ -114,11 +128,12 @@ namespace DAB
             }
 		}
 
-		// we need dummy here otherwise, once HEAD and ...TAIL are exhausted, the template argument list is <> which becomes an invalid specialization.   So we just need SOMETHING there, in this case a dummy int
+		// we need dummy here otherwise, once HEAD and ...TAIL are exhausted, the template argument list is <> which becomes an invalid specialization.
+        // this case is reached when all passed in classes have been exhausted and all have returned false on their respective isCompatible() calls
 		template< int , typename ...VS >
-		dabInterface *makeInstances ( char const *, types<>, VS &&...vs ) {
+		dabInterface *makeInstances ( char const *, types<>, VS &&... ) {
             // if we ever got here, then we never found the proper class name to instantiate
-            throw DAB::dabException ( 400, "class not found" );
+            throw DAB::dabException ( 400, "no compatible devices found" );
         }
 	};
-};
+}

@@ -21,10 +21,14 @@
 
 #include "Json.h"
 
+// this is the main parser for the jsonElement class
+// it takes the pointer to a json string and returns a jsonObject as a result
+// it is fully recursive
 jsonElement::jsonElement( char const **str )
 {
 	while ( isSpace ( **str ) ) (*str)++;		// skip spaces and eol characters
 
+    // see if we're parsing an object
 	if ( (*str)[0] == '{' )
 	{
 		// we're a json object
@@ -37,13 +41,17 @@ jsonElement::jsonElement( char const **str )
 		bool first = true;
 		for ( ;; )
 		{
+            // skip any whitespace
 			while ( isSpace ( **str ) ) (*str)++;		// skip spaces and eol characters
 
+            // are we one parsing the object?
 			if ( (*str)[0] == '}' )
 			{
 				(*str)++;
 				break;
 			}
+
+            // if this isn't our first name/value pair we should have a , as the next character
 			if ( !first )
 			{
 				if ( (*str)[0] != ',' )
@@ -61,8 +69,10 @@ jsonElement::jsonElement( char const **str )
 			first = false;
 
 			std::string name;
+            // are we quoted name : values?   We can handle either
 			if ( (*str)[0] == '"' )
 			{
+                // quoted
 				(*str)++;
 				while ( **str && (*str)[0] != '"' )
 				{
@@ -77,6 +87,7 @@ jsonElement::jsonElement( char const **str )
 				}
 			} else
 			{
+                // non-quoted
 				if ( !isSymbol( **str ) )
 				{
 					throw "invalid json symbol value";
@@ -87,34 +98,44 @@ jsonElement::jsonElement( char const **str )
 				}
 			}
 
+            // skip whitespace
 			while ( isSpace ( **str ) ) (*str)++;		// skip spaces and eol characters
+            // must have a :
 			if ( (*str)[0] != ':' )
 			{
 				throw "missing name/value separator";
 			}
 			(*str)++;
 
+            // skip space after :
 			while ( isSpace ( **str ) ) (*str)++;		// skip spaces and eol characters
 
+            // recurse for the value and just call the assignment operator for objects to do the assignment
 			obj[name] = jsonElement( str );
 		}
 	} else if ( (*str)[0] == '[' )
 	{
 		(*str)++;
+        // instantiate us as an array
 		value = jsonElement::arrayType();
 
+        // get a reference to our underlying array
 		auto &arr = std::get<jsonElement::arrayType>( value );
 
 		bool first = true;
+        // start looping, loop will terminate when we hit the end ] character
 		for ( ;; )
 		{
+            // eat any whitespace
 			while ( isSpace ( **str ) ) (*str)++;		// skip spaces and eol characters
 
+            // test to see if we're done with the array
 			if ( (*str)[0] == ']' )
 			{
 				(*str)++;
 				break;
 			}
+            // if we're not the first element than we should have a , separator
 			if ( !first )
 			{
 				if ( (*str)[0] != ',' )
@@ -126,6 +147,7 @@ jsonElement::jsonElement( char const **str )
 			}
 			first = false;
 
+            // recurse and push to the back of the array the jsonElement value
 			arr.push_back( jsonElement( str ) );
 		}
 	} else if ( (*str)[0] == '"' )
@@ -136,6 +158,7 @@ jsonElement::jsonElement( char const **str )
 		std::string v;
 		while ( **str && (*str)[0] != '"' )
 		{
+            // handle any quoted special values
 			if ( (*str)[0] == '\\' && (*str)[1] == '"' )
 			{
 				v += '"';
@@ -161,6 +184,7 @@ jsonElement::jsonElement( char const **str )
 				v += *((*str)++);
 			}
 		}
+        // skip  over the ending " character
 		if ( **str )
 		{
 			(*str)++;
@@ -168,17 +192,21 @@ jsonElement::jsonElement( char const **str )
 		{
 			throw "missing \"";
 		}
-		value = v;
+        // assign us the parsed string
+		value = std::move ( v );
 	} else if ( isNumB ( **str ) )
 	{
 		std::string v;
 		bool isFloat = false;
+        // loop over and build a string of all our number characters
 		while ( isNum( **str ) )
 		{
+            // if we see these we're a float
 			if ( **str == '.' ) isFloat = true;
 			if ( **str == 'e' ) isFloat = true;
 			v += *((*str)++);
 		}
+        // convert from string and assign us, either a float or a long long
 		if ( isFloat )
 		{
 			value = std::stod( v.c_str() );
@@ -188,14 +216,17 @@ jsonElement::jsonElement( char const **str )
 		}
 	} else if ( !memcmp( *str, "true", 4 ) )
 	{
+        // boolean true
 		value = true;
 		*str += 4;
 	} else if ( !memcmp( *str, "false", 5 ) )
 	{
+        // boolean false
 		value = false;
 		*str += 5;
 	} else if ( !memcmp( *str, "null", 4 ) )
 	{
+        // null which is indicated by std::monostate in the variant
 		value = std::monostate();
 		*str += 4;
 	} else
@@ -204,8 +235,8 @@ jsonElement::jsonElement( char const **str )
 	}
 }
 
-// ----------------------------------------------- creater functions
-jsonElement::operator bool()
+// ----------------------------------------------- accessor methods
+jsonElement::operator bool &()
 {
 	if ( std::holds_alternative<int64_t>( value ) )
 	{
@@ -216,7 +247,7 @@ jsonElement::operator bool()
 	}
 	return std::get<bool>( value );
 }
-jsonElement::operator int64_t ()
+jsonElement::operator int64_t & ()
 {
 	if ( std::holds_alternative<double>( value ) )
 	{
@@ -228,7 +259,7 @@ jsonElement::operator int64_t ()
 	}
 	return std::get<int64_t>( value );
 }
-jsonElement::operator double()
+jsonElement::operator double &()
 {
 	if ( std::holds_alternative<int64_t>( value ) )
 	{
@@ -239,7 +270,7 @@ jsonElement::operator double()
 	}
 	return std::get<double>( value );
 }
-jsonElement::operator std::string ()
+jsonElement::operator std::string & ()
 {
 	if ( std::holds_alternative<int64_t>( value ) )
 	{
@@ -303,6 +334,8 @@ size_t jsonElement::size() const
 	throw "invalid usage";
 }
 // ------------------------------- serialization
+// turns jsonElement's into a json string.
+// if quoteNames controls whether the name of an object value is quoted   ie.  "name" : value
 void jsonElement::serialize( std::string &buff, bool quoteNames ) const
 {
 	if ( std::holds_alternative<objectType>( value ) )

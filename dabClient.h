@@ -29,6 +29,7 @@
 
 namespace DAB
 {
+    // standard exception structure to return our error code and appropriate user readable text
     struct dabException : std::exception
     {
         int64_t errorCode;
@@ -71,7 +72,7 @@ namespace DAB
     };
 
     // this is our actual dispatcher.
-    // it's purpose is to take call a c++ method, but call it with parameters that are extracted from the json parameter being passed in.
+    // It's purpose is to take call a c++ method, but call it with parameters that are extracted from the json parameter being passed in.
     // there are two types of parameter arrays.  fixedParams whose value MUST be present in the json, and optionalParams whose value need not be present in the json, and if not there a default constructed version is passed in
     // template takes the number of fixed and optional parameters, the type of class used to dispatch against and the R ( C:: * )(Args...)  prototype for the method to call
     template< size_t nFixed, size_t nOptional, typename T, class R, class C, class ... Args >
@@ -79,10 +80,11 @@ namespace DAB
     {
         nativeDispatch ()
         {
+            // should never be called
             assert ( false );
         }
 
-        // the constructor takes the function pointer of the method to call, and a vector of fixed and a vector of optional paramters
+        // the constructor takes the function pointer of the method to call, and a vector of fixed and a vector of optional parameters
         nativeDispatch ( R ( C::*func ) ( Args... ), std::vector<std::string_view> const &fixedParams, std::vector<std::string_view> const &optionalParams ) : fixedParams ( fixedParams ), optionalParams ( optionalParams )
         {
             funcPtr = func;
@@ -99,18 +101,21 @@ namespace DAB
 
     private:
 
+        // this is the actual function we wish to dispatch against
         R ( C::*funcPtr ) ( Args... );
 
+        // these are the names of the fixed prameters we
         std::vector<std::string_view> fixedParams;
         std::vector<std::string_view> optionalParams;
 
-        // typelist for our metap-rogram below
+        // type-list for our meta-program below   This struct is blank and only servers to specialize functions based on the type parameter pack being passed in.
         template< class ... >
         struct types
         {
         };
 
-        // start iterating through any fixed parameters.   We lookup the element in the jsonElement class and recurse into the function again with the looked up element at the end of the parameter list
+        // start iterating through any fixed parameters.   We look up the element in the jsonElement class and recurse
+        //     into the function again with the looked up element at the end of the parameter list
         //     this results in a function call with the jsonElements automatically discovered
         //     the first two parameters are which fixed and optional parameters to extract
         template< size_t fixed, size_t optional, class Head, class ... Tail, class ...Vs >
@@ -120,6 +125,7 @@ namespace DAB
             {
                 // extract the fixedParams (the one we're current extracting is passed in by the first template parameter
                 // then recurse but call the next template parameter,  the extracted parameters are appended onto the end as a VS...vs parameter pack
+                // we check first in "payload" and second in the base json to allow us to pass in either type of value as the parameter (for instance context)
                 if ( elem["payload"].has ( fixedParams[fixed] ))
                 {
                     return callFixed<fixed + 1, optional> ( cls, elem, types<Tail...>{}, std::forward<Vs> ( vs )..., elem["payload"][fixedParams[fixed]] );
@@ -137,7 +143,7 @@ namespace DAB
             }
         }
 
-        // for cases with NO optional parameters
+        // for cases with NO optional parameters - type list has been exhausted and there are no optional parameters
         template< size_t fixed, size_t optional, class ...Vs >
         jsonElement callFixed ( T *cls, jsonElement const &, types<>, Vs &&...vs )
         {
@@ -154,7 +160,9 @@ namespace DAB
             }
         }
 
-        // start extracting the optional parameters and looking them up in the jsonElement.   If the desired element isn't present in the passed in json object, then we just create a default-initialized value of type HEAD
+        // start extracting the optional parameters and looking them up in the jsonElement.
+        //     If the desired element isn't present in the passed in json object, then we just
+        //     create a default-initialized value of type HEAD
         template< size_t fixed, size_t optional, class Head, class ... Tail, class ...Vs >
         jsonElement callOptional ( T *cls, jsonElement const &elem, types<Head, Tail ...>, Vs &&...vs )
         {
@@ -194,6 +202,9 @@ namespace DAB
         }
     };
 
+    // this is our unspecialized dabInterface class.   It contains a minimal amount of functionality
+    //     (storing the publish callback as well as the interface to call it)
+    //     everything else is implemented in dabClient which inherits from this class
     class dabInterface
     {
         std::function< void(jsonElement const &) > publishCallback;
@@ -203,16 +214,19 @@ namespace DAB
 
         virtual jsonElement dispatch ( jsonElement const &json ) = 0;
 
+        // set the callback for publishing (sending out telemetry)
         void setPublishCallback ( decltype ( publishCallback) cb )
         {
             publishCallback = std::move(cb);
         }
 
+        // actually call the publish callback with the supplied json
         virtual void publish ( jsonElement const &elem )
         {
             (publishCallback) ( elem );
         }
 
+        // do nothing routine to return an array of topics that this class supports (for mqtt subscription)
         virtual std::vector<std::string> getTopics ()
         {
             return {};
@@ -242,9 +256,9 @@ namespace DAB
             def( "/input/key-press", inputKeyPress, inputKeyPress, { "keyCode"}, {} )                                                               \
             def( "/input/long-key-press", inputKeyLongPress, inputKeyLongPress, ({ "keyCode", "durationsMs" }), {} )                                \
             def( "/output/image", outputImage, outputImage, {}, {} )                                                                                \
-            def( "/device-telemetry/start", deviceTelemetry, deviceTelemetryStartInternal, ({ "duration", "topic" }), {} )                                     \
+            def( "/device-telemetry/start", deviceTelemetry, deviceTelemetryStartInternal, ({ "duration", "topic" }), {} )                          \
             def( "/device-telemetry/stop", deviceTelemetry, deviceTelemetryStopInternal, {}, {} )                                                   \
-            def( "/app-telemetry/start", appTelemetry, appTelemetryStartInternal, ({ "appId", "duration", "topic" }), {} )                                   \
+            def( "/app-telemetry/start", appTelemetry, appTelemetryStartInternal, ({ "appId", "duration", "topic" }), {} )                          \
             def( "/app-telemetry/stop", appTelemetry, appTelemetryStopInternal, {"appId"}, {} )                                                     \
             def( "/health-check/get", healthCheckGet, healthCheckGet, { }, {} )                                                                     \
             def( "/voice/list", voiceList, voiceList, { }, {} )                                                                                     \
@@ -255,12 +269,17 @@ namespace DAB
             def( "/discovery", discovery, discovery, { }, {} )                                                                                      \
             def( "/version", version, version, { }, {} )
 
+        // map by operation storing a pointer to the dispatcher and a bool if it has been implemented by the user
         std::map<std::string, std::pair<std::unique_ptr<dispatcher<T>>, bool>> dispatchMap;
+        // the deviceID for this client
         std::string deviceId;
 
+        // telemetry mutex and condition variable for scheduling
         std::mutex telemetryAccess;
         std::condition_variable telemetryCondition;
 
+        // base telemetry Executor class.   This will be specialized and should never be called directly.
+        // we need this as the executor is polymophic based on passe in types
         class telemetryExecutor
         {
         public:
@@ -280,6 +299,10 @@ namespace DAB
             {}
         };
 
+        // this is the actual specialized telemetry executor
+        // it stores:
+        //      the callback to handle the telemetry
+        //      the interval between callbacks
         template< typename F >
         class telemetry : public telemetryExecutor
         {
@@ -307,13 +330,18 @@ namespace DAB
             }
         };
 
+        // this is the structure used to schedule our telemetry callbacks.  Fundamentally it is a map with the index value being the next time for a callback
+        // we use a wait_until condition variable based on the front of the map (the next time something needs to be triggered.
+        // we can add things in at any time by simply doing a notify on the condition variable if we add additional telemetry slots in the future
         std::map<std::chrono::time_point<std::chrono::steady_clock>, std::tuple<std::string, std::string, std::unique_ptr<telemetryExecutor> >> telemetryScheduler;
 
+        // callback to add data to telemetry
         template< typename F >
         void addTelemetry ( std::chrono::milliseconds interval, std::string const &id, std::string const &topic, F getTelemetryCallback )
         {
             std::lock_guard l1 ( telemetryAccess );
 
+            // iterate through our telemetry to see if the app(or device) already exists, if so, just update the interval
             for ( auto it = telemetryScheduler.begin(); it != telemetryScheduler.end(); it++ )
             {
                 if ( std::get<0>(it->second) == id )
@@ -323,13 +351,12 @@ namespace DAB
                     return;
                 }
             }
-
-
             // schedule for NOW so we send one immediately
             telemetryScheduler.insert ( std::move ( std::pair ( std::chrono::steady_clock::now (), std::move(std::tuple(id, topic, std::make_unique<telemetry<F>> ( interval, getTelemetryCallback ) )) )));
             telemetryCondition.notify_all ();
         }
 
+        // pretty self-explanatory, if it exists delete it
         void deleteTelemetry ( std::string const &id )
         {
             std::lock_guard l1 ( telemetryAccess );
@@ -346,26 +373,34 @@ namespace DAB
             }
         }
 
+        // telemetryTask is a worker thread, we use the exiting boolean to allow us to exit cleanly
         std::atomic<bool> exiting = false;
 
+        // this is our main scheduling thread
         void telemetryTask ()
         {
+            // keep going so long as our exiting boolean has not been set to true
             while ( !exiting )
             {
                 std::unique_lock l1 ( telemetryAccess );
                 if ( telemetryScheduler.empty() )
                 {
+                    // nothing to schedule so just wait until our condition variable gets notified
                     telemetryCondition.wait ( l1 );
                 } else
                 {
+                    // wait until either our condition variable gets notified (something added or deleted or exiting)
+                    //    or until our next-scheduled telemetry time is exceeded
                     telemetryCondition.wait_until( l1, telemetryScheduler.begin ()->first );
                 }
-
                 if ( !telemetryScheduler.empty ())
                 {
+                    // check to see if our next to fire event time has been passed, if so get the telemetry data and publish it
                     if ( telemetryScheduler.begin ()->first < std::chrono::steady_clock::now ())
                     {
+                        // get the telemetry data (calling the callback passed in during addTelemetry)
                         auto rsp = std::get<2>(telemetryScheduler.begin ()->second).get()->getTelemetry ();
+                        // call the publish callback to send the telemetry data to any subscribers
                         publish ( { { "topic", std::get<1>(telemetryScheduler.begin ()->second) }, {"payload", rsp} } );
 
                         // extract the node entry, calculate a new key value (execution time) and reinsert (no reallocation or copying, just some pointer manipulation so this is fast
@@ -379,12 +414,13 @@ namespace DAB
 
     public:
 
-        std::thread  taskId;
+        std::thread  telemetryThreadId;
 
         explicit dabClient ( std::string const &deviceId ) : deviceId ( deviceId )
         {
             // XMACRO instantiation of our list of method names, methods and fixed and optional parameters
-            // this is resolved into a map of method name and a pair of unique pointers to a nativeDispatcher instance and a bool indicating if the method was overridden by the instantiating class (must be done using CRTP)
+            // this is resolved into a map of method name and a pair of unique pointers to a nativeDispatcher
+            //     instance and a bool indicating if the method was overridden by the instantiating class (must be done using CRTP)
 #define def( methName, detectFunc, callFunc, fixedParams, optionalParams )                                                                                                                                                                                            \
                 {                                                                                                       \
                     auto disp = std::make_unique<nativeDispatch<std::initializer_list<char const *>fixedParams.size (), std::initializer_list<char const *>optionalParams.size (), T, decltype(&T::callFunc)>> ( &T::callFunc, std::vector<std::string_view> fixedParams, std::vector<std::string_view> optionalParams );   \
@@ -394,9 +430,11 @@ namespace DAB
                 }
             METHODS
 
-            taskId = std::thread ( &dabClient::telemetryTask, this );
+            telemetryThreadId = std::thread ( &dabClient::telemetryTask, this );
         }
 
+        // this is the getTopics instantiation.  It returns a list of all the operations we support so that we subscribe to them
+        // to the mqtt broker
         std::vector<std::string> getTopics () override
         {
             std::vector<std::string> topics;
@@ -413,10 +451,12 @@ namespace DAB
 
         ~dabClient () override
         {
+            // set exiting, notify our telemetry worker thread and wait for it to exit
             exiting = true;
             telemetryCondition.notify_all();
-            taskId.join();
+            telemetryThreadId.join();
         }
+
         // this is our implementation of opList.   It uses the overridden bool to specify if the operation is supported and only returns operations that the client supports
         jsonElement opList ()
         {
@@ -440,10 +480,14 @@ namespace DAB
             return elem;
         }
 
+        // this is the internal implementation for deviceTelemetryStart.  This is NOT the override for the users telemetry call
+        //    this function takes the duration and sets up the calls to the appropriate telemetry method.  That method id described
+        //    lower down in the codebase
         jsonElement deviceTelemetryStartInternal ( int64_t durationMs, std::string const &topic )
         {
             if constexpr ( std::is_member_function_pointer_v<decltype ( &T::deviceTelemetry )> )
             {
+                // construct the topic to publish on and add the telemetry with the lambda that calls the deviceTelemetry() method (which is what the user needs to implement)
                 addTelemetry ( std::chrono::milliseconds ( durationMs ), "", std::string ( "dab/" ) + deviceId + "/device-telemetry/metrics" , [=, this] () { return (static_cast<T*>(this)->*(&T::deviceTelemetry )) (  ); } );
                 return {{"duration", durationMs}};
             } else
@@ -452,16 +496,21 @@ namespace DAB
             }
         }
 
+        // this is the device telemetry stop handler.  The user need not worry about this, once this is called they will simply no longer receive device telemetry callbacks
         jsonElement deviceTelemetryStopInternal ()
         {
             deleteTelemetry ( "" );
             return {};
         }
 
+        // this is the internal implementation for applicationTelemetryStart.  This is NOT the override for the users telemetry call
+        //    this function takes the duration and sets up the calls to the appropriate telemetry method.  That method id described
+        //    lower down in the codebase
         jsonElement appTelemetryStartInternal ( std::string const &appId, int64_t durationMs, std::string const &responseTopic )
         {
             if constexpr ( std::is_member_function_pointer_v<decltype ( &T::appTelemetry )> )
             {
+                // construct the topic to publish on and add the telemetry with the lambda that calls the appTelemetry() method (which is what the user needs to implement)
                 addTelemetry ( std::chrono::milliseconds ( durationMs ), appId, std::string ( "dab/" ) + deviceId + "/app-telemetry/metrics/" + appId , [=, this] () { return (static_cast<T*>(this)->*(&T::appTelemetry )) ( appId ); } );
                 return {{"duration", durationMs}};
             } else
@@ -470,6 +519,7 @@ namespace DAB
             }
         }
 
+        // this is the device telemetry stop handler.  The user need not worry about this, once this is called they will simply no longer receive application telemetry callbacks
         jsonElement appTelemetryStopInternal ( std::string const &appId )
         {
             deleteTelemetry ( appId );
@@ -477,6 +527,10 @@ namespace DAB
         }
 
         // our main dispatch entry point.
+        // this function takes in the json, extracts the topic, response topic, any correlation data
+        // it then calls the proper user handler, takes the payload response, builds the full response and
+        // publishes it using the response topic.
+        // it catches any exceptions and builds appropriate dab error responses should a failure occur
         jsonElement dispatch ( jsonElement const &elem ) override
         {
             jsonElement rsp;
@@ -568,7 +622,7 @@ namespace DAB
         /*
             DAB METHODS
 
-            These functions are place-holder/prototypes used in the meta-template paramter deduction above.
+            These functions are place-holder/prototypes used in the meta-template parameter deduction above.
             The opList will detect if these functions have been overridden by the users DAB class and only emit operations that have been overridden
         */
 
