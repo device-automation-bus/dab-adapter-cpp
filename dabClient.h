@@ -262,11 +262,9 @@ namespace DAB
             def( "/app-telemetry/stop", appTelemetry, appTelemetryStopInternal, {"appId"}, {} )                                                     \
             def( "/health-check/get", healthCheckGet, healthCheckGet, { }, {} )                                                                     \
             def( "/voice/list", voiceList, voiceList, { }, {} )                                                                                     \
-            def( "/voice/list", voiceSet, voiceSet, { "voiceSystem" }, {} )                                                                         \
-            def( "/voice/send-audio", voiceSendAudio, voiceSendAudio, { "fileLocation" }, {"voiceSystem" } )                                        \
-            def( "/voice/send-audio", voiceSendText, voiceSendText, { "requestText" }, {"voiceSystem" } )                                           \
-            def( "/voice/send-text", voiceList, voiceList, { }, {} )                                                                                \
-            def( "/discovery", discovery, discovery, { }, {} )                                                                                      \
+            def( "/voice/set", voiceSet, voiceSet, { "voiceSystem" }, {} )                                                                         \
+            def( "/voice/send-audio", voiceSendAudio, voiceSendAudio, { "fileLocation" }, {"voiceSystem" } )                                       \
+            def( "/voice/send-text", voiceSendText, voiceSendText, { "requestText" }, {"voiceSystem" } )                                           \
             def( "/version", version, version, { }, {} )
 
         // map by operation storing a pointer to the dispatcher and a bool if it has been implemented by the user
@@ -491,8 +489,7 @@ namespace DAB
         // returns the currently supported protocol version
         jsonElement discovery ()
         {
-            jsonElement elem;
-            return elem;
+            return {{"ip", ""}, {"deviceId", deviceId} };
         }
         // this is the internal implementation for deviceTelemetryStart.  This is NOT the override for the users telemetry call
         //    this function takes the duration and sets up the calls to the appropriate telemetry method.  That method id described

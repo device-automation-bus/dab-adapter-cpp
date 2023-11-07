@@ -35,7 +35,7 @@ public:
 	    return true;
     }
 
-    jsonElement systemSettingsGet ()
+    DAB::jsonElement systemSettingsGet ()
     {
         // an example of how to return json data
         return {{"status",                200},
@@ -55,9 +55,9 @@ public:
                 {"textToSpeech",          true}};
     }
 
-    jsonElement appList ()
+    DAB::jsonElement appList ()
     {
-        jsonElement rsp;
+        DAB::jsonElement rsp;
 
         rsp["applications"].makeArray ();           // rsp will be an object with "applications" : []
 #ifdef _WIN32
@@ -97,27 +97,27 @@ public:
         return rsp;
     }
 
-    jsonElement appLaunchWithContent ( std::string const &appId, std::string const &contentId, jsonElement const &elem )
+    DAB::jsonElement appLaunchWithContent ( std::string const &appId, std::string const &contentId, DAB::jsonElement const &elem )
     {
         // example return
         return {{"status", 200},
                 {"state",  "launched"}};
     }
 
-    jsonElement deviceInfo ()
+    DAB::jsonElement deviceInfo ()
     {
         // example return
         return {{"status",  200},
                 {"version", "2.0"}};
     }
 
-    jsonElement deviceTelemetry ()
+    DAB::jsonElement deviceTelemetry ()
     {
         // example exception
         throw DAB::dabException{501, "unsupported"};
     }
 
-    jsonElement appTelemetry ( std::string const &appId )
+    DAB::jsonElement appTelemetry ( std::string const &appId )
     {
         // example return
         return { "app-status:", std::string ( "all systems nominal for " ) + appId };
@@ -128,76 +128,76 @@ public:
     // the library will detect the fact that there is now a handler defined, add it to the dab/<deviceid>/oplist response
     // and begin routing request automatically.  Nothing else needs be done.
 #if 0
-    jsonElement deviceInfo ()
+    DAB::jsonElement deviceInfo ()
     {
         throw std::pair ( 403, "not found" );
     }
 
-    jsonElement appLaunch ( std::string const &appId, jsonElement const &elem )
+    DAB::jsonElement appLaunch ( std::string const &appId, DAB::jsonElement const &elem )
     {
         throw std::pair ( 403, "not found" );
     }
-    jsonElement appLaunchWithContent ( std::string const &appId, std::string const &contentId, jsonElement const &elem )
+    DAB::jsonElement appLaunchWithContent ( std::string const &appId, std::string const &contentId, DAB::jsonElement const &elem )
     {
         throw std::pair ( 403, "not found" );
     }
-    jsonElement appGetState ( std::string const &appId )
+    DAB::jsonElement appGetState ( std::string const &appId )
     {
         throw std::pair ( 403, "not found" );
     }
-    jsonElement appExit ( std::string const &appId, bool force )
+    DAB::jsonElement appExit ( std::string const &appId, bool force )
     {
         throw std::pair ( 403, "not found" );
     }
-    jsonElement systemRestart ()
+    DAB::jsonElement systemRestart ()
     {
         throw std::pair ( 403, "not found" );
     }
-    jsonElement systemSettingsList ()
+    DAB::jsonElement systemSettingsList ()
     {
         throw std::pair ( 403, "not found" );
     }
-    jsonElement systemSettingsSet ( jsonElement const &elem )
+    DAB::jsonElement systemSettingsSet ( jsonElement const &elem )
     {
         throw std::pair ( 403, "not found" );
     }
-    jsonElement inputKeyList ()
+    DAB::jsonElement inputKeyList ()
     {
         throw std::pair ( 403, "not found" );
     }
-    jsonElement inputKeyPress ( std::string keyCode )
+    DAB::jsonElement inputKeyPress ( std::string keyCode )
     {
         throw std::pair ( 403, "not found" );
     }
-    jsonElement inputKeyLongPress ( std::string keyCode, int64_t durationMs )
+    DAB::jsonElement inputKeyLongPress ( std::string keyCode, int64_t durationMs )
     {
         throw std::pair ( 403, "not found" );
     }
-    jsonElement outputImage ()
+    DAB::jsonElement outputImage ()
     {
         throw std::pair ( 403, "not found" );
     }
-    jsonElement healthCheckGet ()
+    DAB::jsonElement healthCheckGet ()
     {
         throw std::pair ( 403, "not found" );
     }
-    jsonElement voiceList ()
+    DAB::jsonElement voiceList ()
     {
         throw std::pair ( 403, "not found" );
     }
-    jsonElement voiceSet ( jsonelement const &voiceSystem )
+    DAB::jsonElement voiceSet ( jsonelement const &voiceSystem )
     {
         throw std::pair ( 403, "not found" );
     }
-    jsonElement voiceSendAudio ( std::string const &fileLocation, std::string const &voiceSystem )
+    DAB::jsonElement voiceSendAudio ( std::string const &fileLocation, std::string const &voiceSystem )
     {
         throw std::pair ( 403, "not found" );
     }
-    jsonElement voiceSendText ( std::string const &requestText, std::string const &voiceSystem )
+    DAB::jsonElement voiceSendText ( std::string const &requestText, std::string const &voiceSystem )
     {
         throw std::pair ( 403, "not found" );
     }
-    jsonElement discovery ()
+    DAB::jsonElement discovery ()
     {
 		throw std::pair ( 403, "not found" );
     }
@@ -220,7 +220,7 @@ int main ( int argc, char *argv[] )
     bridge.makeDeviceInstance ( argv[2], argv[3] );
 
     // this creates the mqtt interface.  It takes the bridge and the ip address of the mqtt broker
-    auto mqtt = dabMQTTInterface ( bridge, argv[1] );
+    auto mqtt = DAB::dabMQTTInterface ( bridge, argv[1] );
 
     // this connects the mqtt interface to the mqtt broker
     mqtt.connect ();

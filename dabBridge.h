@@ -21,7 +21,7 @@
 namespace DAB
 {
 
-    // the daBridge template serves as the main <deviceId> switching dispatch entry point.
+    // the dabBridge template serves as the main <deviceId> switching dispatch entry point.
     // it takes a list of class types, each of which must support a static isCompatible method to determine if that class can handle the specified device
     // Instances of the handler object are created by issuing a makeInstance( <deviceId>[, <ipAddress>, [<params...>]] ) call
     // the object created is will be routed any calls destined for the specified <deviceId>
