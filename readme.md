@@ -8,6 +8,7 @@ The library utilizes several classes.
     DAB::dabClient          -   This is the base class that an implementation will inherit from when implementing their DAB methods
     DAB::dabBridge          -   This class implements the dabBridge functionality.
     DAB::dabMQTTInterface   -   This class implements the MQTT interface layer.
+    DAB::jsonElement        -   This class implments json handling (creation, serialization, access and assignment)
 
 External dependencies.
 
@@ -93,7 +94,7 @@ For signatures of all supported methods, please see the dab.cpp example file.
 
 Additionally, the library will parse any non-optional parameters for you and pass them to the method.  Optional parameters are passed as a jsonElement const reference.
 
-### jsonElement
+### DAB::jsonElement
 
 The jsonElement class is the DAB clients c++ library for supporting json operations.
 
