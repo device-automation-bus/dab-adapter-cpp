@@ -1,5 +1,30 @@
 # Device Automation Bus - C++ Reference
 
+- [Overview](#overview)
+    * [Structure](#structure)
+    * [Implementation](#implementation)
+        + [DAB::dabClient](#dabdabclient)
+        + [DAB::dabBridge](#dabdabbridge)
+        + [DAB::dabMQTTInterface](#dabdabmqttinterface)
+    * [Implementing DAB methods](#implementing-dab-methods)
+        + [DAB::jsonElement](#dabjsonelement)
+            - [assigning a constant value](#assigning-a-constant-value)
+            - [objects](#objects)
+            - [arrays](#arrays)
+    * [Bridge vs Hosted](#bridge-vs-hosted)
+    * [Building the test code](#building-the-test-code)
+
+# Overview
+
+The C++ DAB reference code is designed to ease implementation of a DAB client.   The library implements all necessary interface, parsing, dispatch, etc. and requires the implementor to implement only the methods they wish the support.
+The library comes with handlers already implemented for the follow DAB operations:
+
+    dab/<deviceId>/operations/list
+    dab/<deviceId>/version
+    dab/discovery
+
+Other operations are optional and are up to the user to implement.
+
 ## Structure
 The reference code is distributed as a header-only library.
 
@@ -159,6 +184,31 @@ In order to force the library to interpret such an initializer as an array, it i
 DAB::jsonElment x = { DAB::jsonElement::array, "name", "value" };  // this will be interpreted as an array of length two and not as an object
 ```
 
+## Bridge vs Hosted
 
+The library can be used in both bridge, where it executes on a test platform, and communicates with the device under test via a manufacturers proprietary testing protocol, or alternatively, it can execute on the device itself.
+The library is entirely agnostic with regard to the communication path to the device.  By default an IP address is passed in, however this is simply a string.  It can be null, or any other identifier the developer wishes to use.
+If a manufacturer wishes to hose the executable on the device itself, all that is required is for the isCompatible() method to return true if the executable is capable of communicating with the hardware, and for the methods to implement the necessary communication path.
 
+## Building the test code
 
+The library is distributed as a header-only library.  However it does have a dependency on the paho-mqtt library.  The library comes with a vcpkg.json file and as such you can utilize vcpkg to fetch the library.
+
+You can use:
+
+```shell
+vcpkg install
+```
+followed by
+```shell
+cmake -B build -S .
+cmake --build build
+```
+
+to build the dab example program.
+
+To start the example you would:
+
+```shell
+build/dab ""<mqttBrokerIpAddress:port>"" "<deviceId>" "<deviceUnderTestIpAddress">
+```
