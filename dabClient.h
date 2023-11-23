@@ -17,6 +17,7 @@
 
 #include <thread>
 #include <cstdint>
+#include <cstring>
 #include <initializer_list>
 #include <cassert>
 #include <chrono>
