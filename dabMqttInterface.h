@@ -58,11 +58,23 @@ namespace DAB
                 std::string reqStr ((char const *) message->payload, message->payloadlen );
                 jsonElement req = jsonParser ( reqStr.c_str ());
 
-                // the dispatcher requires the topic to be part of the DAB request.  Add it in.
-                req["topic"] = topic;
+                jsonElement rsp;
+                std::string responseTopic;
 
-                // dispatch to the bridge and start get the response
-                jsonElement rsp = bridge.dispatch ( req );
+                // the dispatcher requires the topic and the response topic to be part of the DAB request.  Add them in.
+                req["topic"] = topic;
+                if ( MQTTProperties_hasProperty( &message->properties, MQTTPROPERTY_CODE_RESPONSE_TOPIC ) )
+                {
+                    MQTTProperty *prop = MQTTProperties_getProperty ( &message->properties, MQTTPROPERTY_CODE_RESPONSE_TOPIC );
+                    responseTopic = std::string ( prop->value.data.data, prop->value.data.len );
+
+                    // dispatch to the bridge and start get the response
+                    rsp = bridge.dispatch ( req );
+                } else
+                {
+                    // Without response topic we don't know where to send the error response, so just throw an exception.
+                    throw dabException (400, "malformed request - missing response topic");
+                }
 
                 MQTTClient_message clientMessage = MQTTClient_message_initializer;
 
@@ -75,11 +87,21 @@ namespace DAB
                 clientMessage.qos = 0;
                 clientMessage.retained = 0;
 
+                if ( MQTTProperties_hasProperty ( &message->properties, MQTTPROPERTY_CODE_CORRELATION_DATA ))
+                {
+                    MQTTProperty *prop = MQTTProperties_getProperty ( &message->properties, MQTTPROPERTY_CODE_CORRELATION_DATA );
+                    if ( auto rc = MQTTProperties_add ( &clientMessage.properties, prop ) != 0 )
+                    {
+                        throw DAB::dabException ( rc, "could not copy correlation data" );
+                    }
+                }
+
                 // get the mutex to serialize calls to the mqtt library
                 std::lock_guard l1 ( mqttInterface->runningMutex );
-                if ( auto rc = MQTTClient_publishMessage ( mqttInterface->client, rsp["topic"].operator const std::string & ().c_str (), &clientMessage, nullptr ))
+                MQTTResponse rc = MQTTClient_publishMessage5 ( mqttInterface->client, responseTopic.c_str (), &clientMessage, nullptr );
+                if ( rc.reasonCode != MQTTREASONCODE_SUCCESS )
                 {
-                    throw DAB::dabException ( rc, "error publishing message" );
+                    throw DAB::dabException ( rc.reasonCode, "error publishing message" );
                 }
             } catch ( DAB::dabException &e )
             {
@@ -123,7 +145,10 @@ namespace DAB
         dabMQTTInterface ( BRIDGE &bridge, std::string const &brokerAddress ) : bridge ( bridge )
         {
             // create the mqtt object
-            if ( auto rc = MQTTClient_create ( &client, brokerAddress.c_str (), "dab", MQTTCLIENT_PERSISTENCE_NONE, nullptr ))
+            MQTTClient_createOptions create_opts = MQTTClient_createOptions_initializer;
+            create_opts.MQTTVersion = MQTTVERSION_5;
+
+            if ( auto rc = MQTTClient_createWithOptions ( &client, brokerAddress.c_str (), "dab", MQTTCLIENT_PERSISTENCE_NONE, nullptr, &create_opts ))
             {
                 throw DAB::dabException ( rc, std::string ( "Failed to create client" ));
             }
@@ -144,23 +169,24 @@ namespace DAB
         // this is the method to actually establish a connection with the mqtt broker.  At this point any initialization that needs to be done should have finished
         auto connect ()
         {
-            MQTTClient_connectOptions conn_opts = MQTTClient_connectOptions_initializer;
+            MQTTClient_connectOptions conn_opts = MQTTClient_connectOptions_initializer5;
 
             conn_opts.keepAliveInterval = 20;
-            conn_opts.cleansession = 1;
 
-            if ( auto rc = MQTTClient_connect ( client, &conn_opts ))
+            MQTTResponse rc = MQTTClient_connect5 ( client, &conn_opts, nullptr, nullptr );
+            if ( rc.reasonCode != MQTTREASONCODE_SUCCESS )
             {
-                throw DAB::dabException ( rc, std::string ( "Failed to set connect" ));
+                throw DAB::dabException ( rc.reasonCode, std::string ( "Failed to set connect" ));
             }
 
             auto topics = bridge.getTopics ();
 
             for ( auto const &topic: topics )
             {
-                if ( auto rc = MQTTClient_subscribe ( client, topic.c_str (), 1 ))
+                MQTTResponse rc = MQTTClient_subscribe5 ( client, topic.c_str (), 1, nullptr, nullptr );
+                if ( rc.reasonCode != MQTTREASONCODE_GRANTED_QOS_1 )
                 {
-                    throw DAB::dabException ( rc, std::string ( "Failed to subscribe" ));
+                    throw DAB::dabException ( rc.reasonCode, std::string ( "Failed to subscribe" ));
                 }
             }
 
@@ -170,7 +196,7 @@ namespace DAB
         // this function should be called when the client wish's to cleanly end the mqtt interface in preparation for exiting.
         auto disconnect ()
         {
-            if ( auto rc = MQTTClient_disconnect ( client, 10000 ))
+            if ( auto rc = MQTTClient_disconnect5 ( client, 10000, MQTTREASONCODE_NORMAL_DISCONNECTION, nullptr ))
             {
                 throw DAB::dabException ( rc, std::string ( "Failed to disconnect" ));
             }

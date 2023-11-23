@@ -126,11 +126,7 @@ namespace DAB
             {
                 // extract the fixedParams (the one we're current extracting is passed in by the first template parameter
                 // then recurse but call the next template parameter,  the extracted parameters are appended onto the end as a VS...vs parameter pack
-                // we check first in "payload" and second in the base json to allow us to pass in either type of value as the parameter (for instance context)
-                if ( elem["payload"].has ( fixedParams[fixed] ))
-                {
-                    return callFixed<fixed + 1, optional> ( cls, elem, types<Tail...>{}, std::forward<Vs> ( vs )..., elem["payload"][fixedParams[fixed]] );
-                } else if ( elem.has ( fixedParams[fixed] ))
+                if ( elem.has ( fixedParams[fixed] ))
                 {
                     return callFixed<fixed + 1, optional> ( cls, elem, types<Tail...>{}, std::forward<Vs> ( vs )..., elem[fixedParams[fixed]] );
                 } else
@@ -168,11 +164,7 @@ namespace DAB
         jsonElement callOptional ( T *cls, jsonElement const &elem, types<Head, Tail ...>, Vs &&...vs )
         {
             // see if the desired element is present
-            if ( elem["payload"].has ( optionalParams[optional] ))
-            {
-                // it is, so extract and call it
-                return callOptional<fixed, optional + 1> ( cls, elem, types<Tail...>{}, std::forward<Vs> ( vs )..., elem["payload"][optionalParams[optional]] );
-            } else if ( elem.has ( optionalParams[optional] ))
+            if ( elem.has ( optionalParams[optional] ))
             {
                 // it is, so extract and call it
                 return callOptional<fixed, optional + 1> ( cls, elem, types<Tail...>{}, std::forward<Vs> ( vs )..., elem[optionalParams[optional]] );
@@ -538,57 +530,47 @@ namespace DAB
             return {};
         }
 
-        // our main dispatch entry point.
-        // this function takes in the json, extracts the topic, response topic, any correlation data
-        // it then calls the proper user handler, takes the payload response, builds the full response and
-        // publishes it using the response topic.
-        // it catches any exceptions and builds appropriate dab error responses should a failure occur
+        // Our main dispatch entry point.
+        // This function takes in the json and extracts the topic.
+        // It then calls the proper user handler and returns the response payload.
+        // It catches any exceptions and builds appropriate dab error responses should a failure occur.
         jsonElement dispatch ( jsonElement const &elem ) override
         {
             jsonElement rsp;
             try
             {
-                if ( elem.has ( "topic" ) and elem.has ( "responseTopic" ) )
+                if ( elem.has ( "topic" ) )
                 {
-                    std::string topic = elem["topic"];
-                    std::string responseTopic = elem["responseTopic"];
-                    std::string corData = elem.has ( "correlationData" ) ? elem["correlationData"] : "";
-
-                    auto it = dispatchMap.find ( topic );
+                    auto it = dispatchMap.find ( elem["topic"] );
                     if ( it != dispatchMap.end ())
                     {
-                        rsp["payload"] = (*it->second.first) ( static_cast<T *>(this), elem );
+                        rsp = (*it->second.first) ( static_cast<T *>(this), elem );
                     }
-                    rsp["topic"] = responseTopic;
-                    if ( !corData.empty ())
+                    if ( !rsp.has ( "status" ))
                     {
-                        rsp["correlationData"] = corData;
-                    }
-                    if ( !rsp["payload"].has ( "status" ))
-                    {
-                        rsp["payload"]["status"] = 200;
+                        rsp["status"] = 200;
                     }
                 } else
                 {
-                    rsp["payload"]["status"] = 400;
-                    rsp["payload"]["error"] = "malformed request";
+                    rsp["status"] = 400;
+                    rsp["error"] = "malformed request";
                 }
             } catch ( std::pair<int, std::string> &e )
             {
-                rsp["payload"]["status"] = e.first;
-                rsp["payload"]["error"] = e.second;
+                rsp["status"] = e.first;
+                rsp["error"] = e.second;
             } catch ( std::pair<int, char const *> &e )
             {
-                rsp["payload"]["status"] = e.first;
-                rsp["payload"]["error"] = e.second;
+                rsp["status"] = e.first;
+                rsp["error"] = e.second;
             } catch ( dabException &e )
             {
-                rsp["payload"]["status"] = e.errorCode;
-                rsp["payload"]["error"] = e.errorText;
+                rsp["status"] = e.errorCode;
+                rsp["error"] = e.errorText;
             } catch ( ... )
             {
-                rsp["payload"]["status"] = 400;
-                rsp["payload"]["error"] = "unable to parse request";
+                rsp["status"] = 400;
+                rsp["error"] = "unable to parse request";
             }
             return rsp;
         }
