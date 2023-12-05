@@ -16,6 +16,7 @@
 
 #include <iostream>
 #include "dabMqttInterface.h"
+#include "rdkAdapter.h"
 
 // This is the main client class for the DAB protocol.   Methods in this class will be called upon receipt of a DAB message
 // This class must inherit from DAB::dabCLient.   The template takes two parameters, the first one is the type of the class being created.
@@ -207,7 +208,7 @@ public:
 int main ( int argc, char *argv[] )
 {
     // dabBridge takes a list of class types
-    DAB::dabBridge<dab_panel> bridge;
+    DAB::dabBridge<DAB::RDK::Adapter, dab_panel> bridge;
 
     if ( argc != 4 )
     {
