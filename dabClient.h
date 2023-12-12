@@ -239,7 +239,7 @@ namespace DAB
             def( "/applications/launch", appLaunch, appLaunch, {"appId"}, {"parameters"} )                                                          \
             def( "/applications/launch-with-content", appLaunchWithContent, appLaunchWithContent, ({ "appId", "contentId" }), { "parameters" } )    \
             def( "/applications/get-state", appGetState, appGetState, { "appId" }, {} )                                                             \
-            def( "/applications/exit", appExit, appExit, {"appId"}, {"force"} )                                                                     \
+            def( "/applications/exit", appExit, appExit, {"appId"}, {"background"} )                                                                     \
             def( "/device/info", deviceInfo, deviceInfo, {}, {} )                                                                                   \
             def( "/system/restart", systemRestart, systemRestart, {}, {} )                                                                          \
             def( "/system/settings/list", systemSettingsList, systemSettingsList, {}, {} )                                                          \
@@ -633,7 +633,7 @@ namespace DAB
             throw dabException{501, "unsupported"};
         }
 
-        jsonElement appExit ( std::string const &appId, bool force )
+        jsonElement appExit ( std::string const &appId, bool background )
         {
             throw dabException{501, "unsupported"};
         }
