@@ -262,8 +262,6 @@ namespace DAB
 
         // map by operation storing a pointer to the dispatcher and a bool if it has been implemented by the user
         std::map<std::string, std::pair<std::unique_ptr<dispatcher<T>>, bool>> dispatchMap;
-        // the deviceID for this client
-        std::string deviceId;
 
         // telemetry mutex and condition variable for scheduling
         std::mutex telemetryAccess;
@@ -402,6 +400,11 @@ namespace DAB
                 }
             }
         }
+
+    protected:
+
+        // the deviceID for this client
+        const std::string deviceId;
 
     public:
 
