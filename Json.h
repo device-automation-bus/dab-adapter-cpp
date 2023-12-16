@@ -43,26 +43,26 @@ namespace DAB
 
         std::variant<std::monostate, int64_t, double, std::string, objectType, arrayType, bool, decltype ( array )> value;
 
-        template< typename, typename >
+        template< typename, typename = void>
         struct is_associative_container
         {
             static constexpr bool value = false;
         };
 
         template< typename C >
-        struct is_associative_container<C, typename C::key_type>
+        struct is_associative_container<C, std::void_t<typename C::mapped_type>>
         {
             static constexpr bool value = true;
         };
 
-        template< typename, typename, typename >
+        template< typename, typename = void, typename = void>
         struct is_sequence_container
         {
             static constexpr bool value = false;
         };
 
         template< typename C >
-        struct is_sequence_container<C, typename C::value_type, decltype ( std::declval<C> ().clear ())>
+        struct is_sequence_container<C, std::void_t<typename C::value_type>, std::enable_if_t<! is_associative_container<C>::value && ! std::is_same_v<C, std::string>>>
         {
             static constexpr bool value = true;
         };
@@ -141,17 +141,17 @@ namespace DAB
         }
 
         // initializer for an associative container.
-        template< class T, typename std::enable_if_t<is_associative_container<T, T>::value> * = nullptr >
+        template< class T, typename std::enable_if_t<is_associative_container<T>::value> * = nullptr >
         jsonElement ( T const &o ) : value ( objectType ( o.cbegin (), o.cend ()))
         {}
 
         // initializer for an array
-        template< class T, typename std::enable_if_t<is_sequence_container<T, T, T>::value> * = nullptr >
+        template< class T, typename std::enable_if_t<is_sequence_container<T>::value> * = nullptr >
         jsonElement ( T const &a ) : value ( arrayType ( a.cbegin (), a.cend ()))
         {}
 
         // for array... needs to have a vector type of <jsonElement>
-        template< class T, typename std::enable_if_t<!is_sequence_container<T, T, T>::value && !is_associative_container<T, T>::value> * = nullptr >
+        template< class T, typename std::enable_if_t<!is_sequence_container<T>::value && !is_associative_container<T>::value> * = nullptr >
         jsonElement ( T const &v )
         {
             if constexpr ( std::is_same_v<const char *, T> )
