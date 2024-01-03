@@ -200,12 +200,12 @@ namespace DAB
     //     everything else is implemented in dabClient which inherits from this class
     class dabInterface
     {
-        std::function< void(jsonElement const &) > publishCallback;
+        std::function< void(std::string const &, jsonElement const &) > publishCallback;
 
     public:
         virtual ~dabInterface () = default;
 
-        virtual jsonElement dispatch ( jsonElement const &json ) = 0;
+        virtual jsonElement dispatch ( std::string const &topic, jsonElement const &json ) = 0;
 
         // set the callback for publishing (sending out telemetry)
         void setPublishCallback ( decltype ( publishCallback) cb )
@@ -214,9 +214,9 @@ namespace DAB
         }
 
         // actually call the publish callback with the supplied json
-        virtual void publish ( jsonElement const &elem )
+        virtual void publish ( std::string const &topic, jsonElement const &elem )
         {
-            (publishCallback) ( elem );
+            (publishCallback) ( topic, elem );
         }
 
         // do nothing routine to return an array of topics that this class supports (for mqtt subscription)
@@ -392,7 +392,7 @@ namespace DAB
                         // get the telemetry data (calling the callback passed in during addTelemetry)
                         auto rsp = std::get<2>(telemetryScheduler.begin ()->second).get()->getTelemetry ();
                         // call the publish callback to send the telemetry data to any subscribers
-                        publish ( { { "topic", std::get<1>(telemetryScheduler.begin ()->second) }, {"payload", rsp} } );
+                        publish ( std::get<1>(telemetryScheduler.begin ()->second), rsp );
 
                         // extract the node entry, calculate a new key value (execution time) and reinsert (no reallocation or copying, just some pointer manipulation so this is fast
                         auto nodeHandle = telemetryScheduler.extract ( telemetryScheduler.begin ()->first );
@@ -531,29 +531,22 @@ namespace DAB
         }
 
         // Our main dispatch entry point.
-        // This function takes in the json and extracts the topic.
+        // This function takes in topic and the json request.
         // It then calls the proper user handler and returns the response payload.
         // It catches any exceptions and builds appropriate dab error responses should a failure occur.
-        jsonElement dispatch ( jsonElement const &elem ) override
+        jsonElement dispatch ( std::string const &topic, jsonElement const &elem ) override
         {
             jsonElement rsp;
             try
             {
-                if ( elem.has ( "topic" ) )
+                auto it = dispatchMap.find ( topic );
+                if ( it != dispatchMap.end ())
                 {
-                    auto it = dispatchMap.find ( elem["topic"] );
-                    if ( it != dispatchMap.end ())
-                    {
-                        rsp = (*it->second.first) ( static_cast<T *>(this), elem );
-                    }
-                    if ( !rsp.has ( "status" ))
-                    {
-                        rsp["status"] = 200;
-                    }
-                } else
+                    rsp = (*it->second.first) ( static_cast<T *>(this), elem );
+                }
+                if ( !rsp.has ( "status" ))
                 {
-                    rsp["status"] = 400;
-                    rsp["error"] = "malformed request";
+                    rsp["status"] = 200;
                 }
             } catch ( std::pair<int, std::string> &e )
             {

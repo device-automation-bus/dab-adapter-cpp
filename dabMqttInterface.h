@@ -61,15 +61,13 @@ namespace DAB
                 jsonElement rsp;
                 std::string responseTopic;
 
-                // the dispatcher requires the topic and the response topic to be part of the DAB request.  Add them in.
-                req["topic"] = topic;
                 if ( MQTTProperties_hasProperty( &message->properties, MQTTPROPERTY_CODE_RESPONSE_TOPIC ) )
                 {
                     MQTTProperty *prop = MQTTProperties_getProperty ( &message->properties, MQTTPROPERTY_CODE_RESPONSE_TOPIC );
                     responseTopic = std::string ( prop->value.data.data, prop->value.data.len );
 
                     // dispatch to the bridge and start get the response
-                    rsp = bridge.dispatch ( req );
+                    rsp = bridge.dispatch ( topic, req );
                 } else
                 {
                     // Without response topic we don't know where to send the error response, so just throw an exception.
@@ -113,7 +111,7 @@ namespace DAB
         }
 
         // this is the publishing call-back that we pass to the bridge object (and subsequently to the dabClient).  It's used for notifications where we send telemetry responses without a request
-        void publishCB ( jsonElement const &elem )
+        void publishCB ( std::string const &topic, jsonElement const &elem )
         {
             MQTTClient_message clientMessage = MQTTClient_message_initializer;
 
@@ -127,7 +125,7 @@ namespace DAB
             clientMessage.retained = 0;
 
             std::lock_guard l1 ( runningMutex );
-            if ( auto rc = MQTTClient_publishMessage ( client, elem["topic"].operator const std::string & ().c_str (), &clientMessage, nullptr ))
+            if ( auto rc = MQTTClient_publishMessage ( client, topic.c_str (), &clientMessage, nullptr ))
             {
                 throw DAB::dabException ( rc, "error publishing message" );
             }
@@ -158,7 +156,9 @@ namespace DAB
                 throw DAB::dabException ( rc, std::string ( "Failed to set callbacks" ));
             }
             // give the bridge the publishing callback
-            bridge.setPublishCallback ( std::function ( [this] ( jsonElement const &elem ) { return publishCB ( elem ); } ));
+            bridge.setPublishCallback ( std::function ( [this] ( std::string const &topic, jsonElement const &elem ) {
+                return publishCB ( topic, elem );
+            } ));
         }
 
         ~dabMQTTInterface ()

@@ -43,48 +43,42 @@ namespace DAB
 
         virtual ~dabBridge() = default;
 
-        std::function< void(jsonElement const &) > publishCallback;
+        std::function< void(std::string const &, jsonElement const &) > publishCallback;
 
         // main topic dispatch entry point.   It extracts the topic, removes the dab/<device_id>/ portion and tries to find it in our map.  If it is there
         // it will dispatch against the stored dispatcher (which will build the parameter lists from the passed in json and then call the specified class method
-        virtual jsonElement dispatch( jsonElement const &json ) {
-            if (json.has("topic")) {
-                std::string const &topic = json["topic"];
-
-                if ( topic == "dab/discovery")
+        virtual jsonElement dispatch( const std::string &topic, jsonElement const &json ) {
+            if ( topic == "dab/discovery")
+            {
+                // we may have multiple devices and each one needs to send a response.   However, we can only return one response.
+                // so we'll instead, iterate through the second device and call publishCallback
+                auto it = instances.begin();
+                it++;
+                for ( ; it != instances.end(); it++ )
                 {
-                    // we may have multiple devices and each one needs to send a response.   However, we can only return one response.
-                    // so we'll instead, iterate through the second device and call publishCallback
-                    auto it = instances.begin();
-                    it++;
-                    for ( ; it != instances.end(); it++ )
-                    {
-                        auto &[name, value] = *it;
-                        publishCallback ( it->second->dispatch ( json ) );
-                    }
-                    // return as a response our first class's response
-                    return instances.begin()->second->dispatch ( json );
-                } else if (topic.starts_with("dab/"))
-                {
-                    auto slashPos = std::string_view(topic.begin() + 4, topic.end()).find_first_of('/');
-                    if (slashPos == std::string::npos) {
-                        throw DAB::dabException ( 400, "topic is malformed" );
-                    }
-
-                    // the deviceId is extracted from "dab/<deviceId>/<method>"
-                    auto deviceId = std::string_view(topic.begin() + 4, topic.begin() + 4 + (int)slashPos);
-                    auto it = instances.find(deviceId);
-                    if (it != instances.end()) {
-                        // now call the dabInterface associated with the deviceId;
-                        return it->second->dispatch(json);
-                    } else {
-                        throw DAB::dabException ( 400, "deviceId does not exist" );
-                    }
-                } else {
+                    auto &[name, value] = *it;
+                    publishCallback ( topic, it->second->dispatch ( topic, json ) );
+                }
+                // return as a response our first class's response
+                return instances.begin()->second->dispatch ( topic, json );
+            } else if (topic.starts_with("dab/"))
+            {
+                auto slashPos = std::string_view(topic.begin() + 4, topic.end()).find_first_of('/');
+                if (slashPos == std::string::npos) {
                     throw DAB::dabException ( 400, "topic is malformed" );
                 }
+
+                // the deviceId is extracted from "dab/<deviceId>/<method>"
+                auto deviceId = std::string_view(topic.begin() + 4, topic.begin() + 4 + (int)slashPos);
+                auto it = instances.find(deviceId);
+                if (it != instances.end()) {
+                    // now call the dabInterface associated with the deviceId;
+                    return it->second->dispatch( topic, json );
+                } else {
+                    throw DAB::dabException ( 400, "deviceId does not exist" );
+                }
             } else {
-                throw DAB::dabException ( 400, "no topic found" );
+                throw DAB::dabException ( 400, "topic is malformed" );
             }
         }
 
