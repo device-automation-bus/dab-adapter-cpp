@@ -74,33 +74,8 @@ namespace DAB
                     throw dabException (400, "malformed request - missing response topic");
                 }
 
-                MQTTClient_message clientMessage = MQTTClient_message_initializer;
-
-                std::string payload;
-
-                // serialize the json response (convert from our internal jsonElement to a string)
-                rsp.serialize ( payload, true );
-                clientMessage.payload = const_cast<char *>(payload.c_str ());
-                clientMessage.payloadlen = (int) payload.size ();
-                clientMessage.qos = 0;
-                clientMessage.retained = 0;
-
-                if ( MQTTProperties_hasProperty ( &message->properties, MQTTPROPERTY_CODE_CORRELATION_DATA ))
-                {
-                    MQTTProperty *prop = MQTTProperties_getProperty ( &message->properties, MQTTPROPERTY_CODE_CORRELATION_DATA );
-                    if ( auto rc = MQTTProperties_add ( &clientMessage.properties, prop ) != 0 )
-                    {
-                        throw DAB::dabException ( rc, "could not copy correlation data" );
-                    }
-                }
-
-                // get the mutex to serialize calls to the mqtt library
-                std::lock_guard l1 ( mqttInterface->runningMutex );
-                MQTTResponse rc = MQTTClient_publishMessage5 ( mqttInterface->client, responseTopic.c_str (), &clientMessage, nullptr );
-                if ( rc.reasonCode != MQTTREASONCODE_SUCCESS )
-                {
-                    throw DAB::dabException ( rc.reasonCode, "error publishing message" );
-                }
+                mqttInterface->publish ( responseTopic, rsp,
+                    MQTTProperties_getProperty ( &message->properties, MQTTPROPERTY_CODE_CORRELATION_DATA ) );
             } catch ( DAB::dabException &e )
             {
                 std::cout << "error (" << e.errorCode << "): " << e.errorText << std::endl;
@@ -110,13 +85,16 @@ namespace DAB
             return 1;
         }
 
-        // this is the publishing call-back that we pass to the bridge object (and subsequently to the dabClient).  It's used for notifications where we send telemetry responses without a request
-        void publishCB ( std::string const &topic, jsonElement const &elem )
+        // This publishes a MQTT message to the given topic.
+        // It is also used as publishing call-back that we pass to the bridge object (and subsequently to the dabClient)
+        // in order to get called for notifications where we send telemetry responses without a request.
+        void publish ( std::string const &topic, jsonElement const &elem, MQTTProperty *correlationData = nullptr)
         {
             MQTTClient_message clientMessage = MQTTClient_message_initializer;
 
             std::string payload;
 
+            // serialize the json response (convert from our internal jsonElement to a string)
             elem.serialize ( payload, true );
 
             clientMessage.payload = const_cast<char *>(payload.c_str ());
@@ -124,10 +102,20 @@ namespace DAB
             clientMessage.qos = 0;
             clientMessage.retained = 0;
 
-            std::lock_guard l1 ( runningMutex );
-            if ( auto rc = MQTTClient_publishMessage ( client, topic.c_str (), &clientMessage, nullptr ))
+            if ( correlationData )
             {
-                throw DAB::dabException ( rc, "error publishing message" );
+                if ( auto rc = MQTTProperties_add ( &clientMessage.properties, correlationData ) != 0 )
+                {
+                    throw DAB::dabException ( rc, "could not copy correlation data" );
+                }
+            }
+
+            // get the mutex to serialize calls to the mqtt library
+            std::lock_guard l1 ( runningMutex );
+            MQTTResponse rc = MQTTClient_publishMessage5 ( client, topic.c_str (), &clientMessage, nullptr );
+            if ( rc.reasonCode != MQTTREASONCODE_SUCCESS )
+            {
+                throw DAB::dabException ( rc.reasonCode, "error publishing message" );
             }
         }
 
@@ -157,7 +145,7 @@ namespace DAB
             }
             // give the bridge the publishing callback
             bridge.setPublishCallback ( std::function ( [this] ( std::string const &topic, jsonElement const &elem ) {
-                return publishCB ( topic, elem );
+                return publish ( topic, elem );
             } ));
         }
 
