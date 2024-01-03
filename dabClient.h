@@ -126,9 +126,10 @@ namespace DAB
             {
                 // extract the fixedParams (the one we're current extracting is passed in by the first template parameter
                 // then recurse but call the next template parameter,  the extracted parameters are appended onto the end as a VS...vs parameter pack
-                if ( elem.has ( fixedParams[fixed] ))
+                if ( elem.has ( fixedParams[fixed] ) || fixedParams[fixed] == "*" )
                 {
-                    return callFixed<fixed + 1, optional> ( cls, elem, types<Tail...>{}, std::forward<Vs> ( vs )..., elem[fixedParams[fixed]] );
+                    jsonElement const &param = fixedParams[fixed] == "*" ? elem : elem[fixedParams[fixed]];
+                    return callFixed<fixed + 1, optional> ( cls, elem, types<Tail...>{}, std::forward<Vs> ( vs )..., param );
                 } else
                 {
                     throw dabException{400, std::string ( "missing parameter \"" ) + fixedParams[fixed].data () + "\""};
@@ -244,7 +245,7 @@ namespace DAB
             def( "/system/restart", systemRestart, systemRestart, {}, {} )                                                                          \
             def( "/system/settings/list", systemSettingsList, systemSettingsList, {}, {} )                                                          \
             def( "/system/settings/get", systemSettingsGet, systemSettingsGet, {}, {} )                                                             \
-            def( "/system/settings/set", systemSettingsSet, systemSettingsSet, { "settings" }, {} )                                                 \
+            def( "/system/settings/set", systemSettingsSet, systemSettingsSet, {"*"}, {} )                                                          \
             def( "/input/key/list", inputKeyList, inputKeyList, {}, {} )                                                                            \
             def( "/input/key-press", inputKeyPress, inputKeyPress, { "keyCode"}, {} )                                                               \
             def( "/input/long-key-press", inputKeyLongPress, inputKeyLongPress, ({ "keyCode", "durationsMs" }), {} )                                \
