@@ -462,7 +462,7 @@ namespace DAB
         // ----------------------------------------------- assignment methods
 
         // this returns a reference to an object with property name.     obj[std::string("name")]
-        template< typename T, typename std::enable_if_t<std::is_same_v < T, std::string_view>> * = nullptr>
+        template< typename T, typename std::enable_if_t<std::is_same_v < T, std::string>> * = nullptr>
 
         jsonElement &operator[] ( T const &name )
         {
