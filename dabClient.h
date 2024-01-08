@@ -248,7 +248,7 @@ namespace DAB
             def( "/system/settings/set", systemSettingsSet, systemSettingsSet, {"*"}, {} )                                                          \
             def( "/input/key/list", inputKeyList, inputKeyList, {}, {} )                                                                            \
             def( "/input/key-press", inputKeyPress, inputKeyPress, { "keyCode"}, {} )                                                               \
-            def( "/input/long-key-press", inputKeyLongPress, inputKeyLongPress, ({ "keyCode", "durationsMs" }), {} )                                \
+            def( "/input/long-key-press", inputKeyLongPress, inputKeyLongPress, ({ "keyCode", "durationMs" }), {} )                                \
             def( "/output/image", outputImage, outputImage, {}, {} )                                                                                \
             def( "/device-telemetry/start", deviceTelemetry, deviceTelemetryStartInternal, ({ "duration", "topic" }), {} )                          \
             def( "/device-telemetry/stop", deviceTelemetry, deviceTelemetryStopInternal, {}, {} )                                                   \
