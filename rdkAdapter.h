@@ -18,6 +18,9 @@
 #include <unordered_set>
 #include <curl/curl.h>
 
+#include <boost/beast/core.hpp>
+#include <boost/beast/http.hpp>
+
 namespace DAB
 {
 namespace RDK
@@ -39,41 +42,27 @@ namespace RDK
 
     class Interface
     {
-        const std::string RDK_URL;
-        struct curl_slist *http_headers;
-
-        static size_t writeCB( void * data, size_t size, size_t nmemb, std::string * responsestr )
-        {
-            size_t realsize = size * nmemb;
-
-            responsestr->append (static_cast<const char *>(data), realsize);
-
-            return realsize;
-        }
+        boost::asio::io_context ctx;
+        boost::beast::tcp_stream stream;
 
         std::string http_post ( const std::string &string )
         {
-            auto curl = make_c_unique (curl_easy_init (), curl_easy_cleanup);
-            if (!curl.get())
-            {
-                throw dabException ( 500, "curl_easy_init() failed" );
-            }
+            namespace beast = boost::beast;
 
-            curl_easy_setopt ( curl.get (), CURLOPT_URL, RDK_URL.c_str() );
-            curl_easy_setopt ( curl.get (), CURLOPT_POSTFIELDS, string.c_str() );
-            curl_easy_setopt ( curl.get (), CURLOPT_HTTPHEADER, http_headers );
-            curl_easy_setopt ( curl.get (), CURLOPT_WRITEFUNCTION, writeCB );
+            beast::http::request<beast::http::string_body> req;
+            req.method ( beast::http::verb::post );
+            req.target ( "/jsonrpc" );
+            req.set ( beast::http::field::content_type, "application/json" );
+            req.body () = string;
+            req.prepare_payload ();
 
-            std::string responsestr;
-            curl_easy_setopt ( curl.get (), CURLOPT_WRITEDATA, &responsestr );
+            beast::http::write ( stream, req );
 
-            CURLcode res = curl_easy_perform ( curl.get() );
-            if ( res != CURLE_OK )
-            {
-                throw dabException ( 500, "HTTP request failed" );
-            }
+            beast::http::response<beast::http::string_body> res;
+            beast::flat_buffer buffer;
+            beast::http::read ( stream, buffer, res );
 
-            return responsestr;
+            return res.body ();
         }
 
         class ServiceBase
@@ -104,16 +93,16 @@ namespace RDK
         };
 
     public:
-        Interface (const std::string &ipAddress):
-            RDK_URL ( "http://" + ipAddress + ":9998/jsonrpc" ),
-            http_headers ( nullptr )
+        Interface (const std::string &ipAddress): stream ( ctx )
         {
-            http_headers = curl_slist_append ( http_headers, "Content-Type: application/json" );
+            stream.connect(boost::beast::tcp_stream::endpoint_type (
+                boost::asio::ip::address::from_string ( ipAddress ), 9998 ) );
         }
 
         ~Interface ()
         {
-            curl_slist_free_all ( http_headers );
+            boost::beast::error_code ec;
+            stream.socket().shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
         }
 
         jsonElement request ( const std::string &method, const jsonElement &params = jsonElement ())

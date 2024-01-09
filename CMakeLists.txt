@@ -20,6 +20,8 @@ include(FindOpenSSL)
 set(PAHO_LIBS eclipse-paho-mqtt-c::paho-mqtt3a eclipse-paho-mqtt-c::paho-mqtt3c eclipse-paho-mqtt-c::paho-mqtt3as eclipse-paho-mqtt-c::paho-mqtt3cs)
 endif()
 
+find_package(Boost REQUIRED)
+
 pkg_check_modules(CURL REQUIRED libcurl)
 
 target_link_libraries(DAB PRIVATE ${PAHO_LIBS} ${CURL_LIBRARIES})
