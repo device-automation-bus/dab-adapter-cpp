@@ -14,10 +14,13 @@
 #pragma once
 
 #include <fstream>
+#include <random>
 #include <ranges>
 #include <unordered_set>
 #include <curl/curl.h>
 
+#include <boost/archive/iterators/base64_from_binary.hpp>
+#include <boost/archive/iterators/transform_width.hpp>
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
 
@@ -38,6 +41,58 @@ namespace RDK
         rdkException ( int64_t errorCode, std::string errorText, jsonElement errorReply = jsonElement ()):
             dabException ( errorCode, std::move ( errorText ) ),
             errorReply ( std::move ( errorReply ) ) {}
+    };
+
+    class UploadServer
+    {
+        static inline const uint16_t PORT = 7878;
+
+        boost::asio::io_context ctx;
+        boost::asio::ip::tcp::acceptor acceptor;
+        const std::string targetPath;
+    public:
+        UploadServer ( const boost::asio::ip::address &local_address, const std::string &targetPath ):
+            acceptor ( ctx, {local_address, PORT} ), targetPath ( targetPath ) {}
+
+        std::string url ()
+        {
+            return std::format ( "http://{}:{}/{}", acceptor.local_endpoint ().address ().to_string (), PORT, targetPath );
+        }
+
+        std::vector<uint8_t> receive ()
+        {
+            namespace beast = boost::beast;
+
+            boost::asio::ip::tcp::socket socket{acceptor.get_executor()};
+            acceptor.accept (socket);
+
+            beast::http::request<beast::http::vector_body<decltype ( UploadServer::receive () )::value_type>> req;
+
+            beast::error_code ec;
+            beast::flat_buffer buffer;
+
+            beast::http::read ( socket, buffer, req, ec );
+
+            if ( !ec &&
+                 req.method () == beast::http::verb::post &&
+                 req[beast::http::field::content_type] == "image/png" &&
+                 req.target () == '/' + targetPath )
+            {
+                beast::http::response<beast::http::empty_body> rsp {beast::http::status::ok, req.version()};
+                beast::write ( socket, beast::http::message_generator ( std::move ( rsp ) ), ec );
+            } else
+            {
+                dabException e ( 400, "Invalid request received" );
+
+                beast::http::response<beast::http::string_body> msg{beast::http::status::bad_request, req.version ()};
+                msg.body () = e.errorText;
+                beast::write ( socket, beast::http::message_generator ( std::move ( msg ) ), ec );
+
+                throw e;
+            }
+
+            return req.body ();
+        }
     };
 
     class Interface
@@ -103,6 +158,11 @@ namespace RDK
         {
             boost::beast::error_code ec;
             stream.socket().shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
+        }
+
+        boost::asio::ip::address localAddress ()
+        {
+            return std::move ( stream.socket ().local_endpoint ().address () );
         }
 
         jsonElement request ( const std::string &method, const jsonElement &params = jsonElement ())
@@ -472,6 +532,25 @@ namespace RDK
             }
         };
 
+        struct ScreenCapture: public Service<ScreenCapture>
+        {
+            static inline const std::string callsign = "org.rdk.ScreenCapture";
+
+            jsonElement uploadScreenCapture ( const std::string &url, const std::optional<std::string> callGUID = {})
+            {
+                jsonElement params {
+                    {"url", url},
+                };
+
+                if ( callGUID.has_value () )
+                {
+                    params["callGUID"] = callGUID.value ();
+                }
+
+                return request ( "uploadScreenCapture", params );
+            }
+        };
+
         template <class Service>
         Service & s()
         {
@@ -781,6 +860,32 @@ namespace RDK
             return {};
         }
 
+        jsonElement outputImage ()
+        {
+            static auto generateGUID = std::bind (
+                std::uniform_int_distribution<uint32_t> ( 0, std::numeric_limits<uint32_t>::max () ),
+                std::default_random_engine ( std::random_device{} () )
+            );
+
+            std::string guid = std::to_string ( generateGUID () );
+
+            UploadServer server ( rdk.localAddress (), guid );
+
+            rdk.s<RDK::ScreenCapture>().uploadScreenCapture ( server.url (), guid );
+
+            auto imgData = server.receive ();
+
+            using namespace boost::archive::iterators;
+            using b64it = base64_from_binary<transform_width<std::vector<uint8_t>::const_iterator, 6, 8>>;
+
+            std::string outputImage ( b64it ( imgData.cbegin () ), b64it ( imgData.cend () ) );
+            outputImage.append ( -outputImage.size () % 4, '=' );
+
+            return {
+                {"outputImage", "data:image/png;base64," + outputImage}
+            };
+        }
+
         /*DAB::jsonElement deviceTelemetry ()
         {
             // example exception
@@ -846,10 +951,6 @@ namespace RDK
         }
 
     #if 0
-        DAB::jsonElement outputImage ()
-        {
-            throw std::pair ( 403, "not found" );
-        }
         DAB::jsonElement voiceSendAudio ( std::string const &fileLocation, std::string const &voiceSystem )
         {
             throw std::pair ( 403, "not found" );
