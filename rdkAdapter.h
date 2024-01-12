@@ -95,6 +95,36 @@ namespace RDK
         }
     };
 
+    class DownloadClient
+    {
+        std::unique_ptr<CURL, std::function<void (CURL *)>> curl;
+    public:
+        DownloadClient ( const std::string& url ): curl ( make_c_unique ( curl_easy_init (), curl_easy_cleanup ) )
+        {
+            curl_easy_setopt ( curl.get (), CURLOPT_URL, url.c_str () );
+        }
+
+        typedef std::function<void(uint8_t *, size_t)> ReceiveCb;
+
+        void receive ( ReceiveCb cb )
+        {
+            curl_easy_setopt ( curl.get (), CURLOPT_WRITEDATA, cb );
+            curl_easy_setopt ( curl.get (), CURLOPT_WRITEFUNCTION, +[] ( uint8_t *data, size_t size, size_t nmemb, ReceiveCb cb ) -> size_t {
+                size_t realsize = size * nmemb;
+
+                cb ( data, realsize );
+
+                return realsize;
+            } );
+
+            CURLcode res = curl_easy_perform ( curl.get() );
+            if ( res != CURLE_OK )
+            {
+                throw dabException ( 500, std::format ( "HTTP request failed: {}", static_cast<int> ( res ) ) );
+            }
+        }
+    };
+
     class Interface
     {
         boost::asio::io_context ctx;
@@ -530,6 +560,14 @@ namespace RDK
                     }}
                 } );
             }
+
+            jsonElement voiceSessionRequest ( const std::string &audioFile, const std::string &type )
+            {
+                return request ( "voiceSessionRequest", {
+                    {"audio_file", audioFile},
+                    {"type", type}
+                } );
+            }
         };
 
         struct ScreenCapture: public Service<ScreenCapture>
@@ -950,11 +988,27 @@ namespace RDK
             }
         }
 
-    #if 0
-        DAB::jsonElement voiceSendAudio ( std::string const &fileLocation, std::string const &voiceSystem )
+        jsonElement voiceSendAudio ( std::string const &fileLocation, std::string const &voiceSystem )
         {
-            throw std::pair ( 403, "not found" );
+            char voiceCommandFilename[] = "/tmp/dabvoicecommandXXXXXX";
+            int voiceCommandFd = mkstemp ( voiceCommandFilename );
+
+            DownloadClient ( fileLocation ).receive ( [voiceCommandFd] ( const uint8_t *data, size_t size ) {
+                if ( write ( voiceCommandFd, data, size ) == -1 )
+                {
+                    throw std::pair ( 500, "Error writing to a file." );
+                };
+            } );
+
+            rdk.s<RDK::VoiceControl>().voiceSessionRequest ( voiceCommandFilename, "ptt_audio_file" );
+
+            close (voiceCommandFd);
+            std::remove ( voiceCommandFilename );
+
+            return {};
         }
+
+    #if 0
         DAB::jsonElement voiceSendText ( std::string const &requestText, std::string const &voiceSystem )
         {
             throw std::pair ( 403, "not found" );
