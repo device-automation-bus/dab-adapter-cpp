@@ -319,6 +319,11 @@ namespace RDK
                 } );
             }
 
+            jsonElement getSystemResourceInfo ()
+            {
+                return request ( "getSystemResourceInfo" );
+            }
+
             jsonElement getScreenResolution ()
             {
                 return request ( "getScreenResolution" );
@@ -936,17 +941,55 @@ namespace RDK
             };
         }
 
-        /*DAB::jsonElement deviceTelemetry ()
+        std::vector<jsonElement> deviceTelemetry ()
         {
-            // example exception
-            throw DAB::dabException{501, "unsupported"};
-        }*/
+            const jsonElement systeminfo = rdk.s<RDK::DeviceInfo>().systeminfo ();
 
-        /*DAB::jsonElement appTelemetry ( std::string const &appId )
+            using namespace std::chrono;
+            const auto timestamp = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+
+            return {
+                {
+                    {"timestamp", timestamp},
+                    {"metric", "cpu"},
+                    {"value", systeminfo["cpuload"]}
+                },
+                {
+                    {"timestamp", timestamp},
+                    {"metric", "memory"},
+                    {"value", ( int64_t ( systeminfo["totalram"] ) - int64_t ( systeminfo["freeram"] ) ) / 1000}
+                }
+            };
+        }
+
+        std::vector<jsonElement> appTelemetry ( std::string const &appId )
         {
-            // example return
-            return { "app-status:", std::string ( "all systems nominal for " ) + appId };
-        }*/
+            const jsonElement types = rdk.s<RDK::RDKShell>().getSystemResourceInfo ()["types"];
+
+            using namespace std::chrono;
+            const auto timestamp = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+
+            int64_t memory = 0;
+
+            for ( auto it = types.cbeginArray (); it != types.cendArray (); ++it )
+            {
+                const jsonElement &type = *it;
+
+                if ( std::string ( type["callsign"] ) == appId )
+                {
+                    memory = type["ram"];
+                    break;
+                }
+            }
+
+            return {
+                {
+                    {"timestamp", timestamp},
+                    {"metric", "memory"},
+                    {"value", memory}
+                }
+            };
+        }
 
         jsonElement healthCheckGet ()
         {
