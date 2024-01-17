@@ -252,9 +252,9 @@ namespace DAB
             def( "/input/key-press", inputKeyPress, inputKeyPress, { "keyCode"}, {} )                                                               \
             def( "/input/long-key-press", inputKeyLongPress, inputKeyLongPress, ({ "keyCode", "durationMs" }), {} )                                \
             def( "/output/image", outputImage, outputImage, {}, {} )                                                                                \
-            def( "/device-telemetry/start", deviceTelemetry, deviceTelemetryStartInternal, ({ "duration", "topic" }), {} )                          \
+            def( "/device-telemetry/start", deviceTelemetry, deviceTelemetryStartInternal, ({ "duration" }), {} )                                   \
             def( "/device-telemetry/stop", deviceTelemetry, deviceTelemetryStopInternal, {}, {} )                                                   \
-            def( "/app-telemetry/start", appTelemetry, appTelemetryStartInternal, ({ "appId", "duration", "topic" }), {} )                          \
+            def( "/app-telemetry/start", appTelemetry, appTelemetryStartInternal, ({ "appId", "duration" }), {} )                                   \
             def( "/app-telemetry/stop", appTelemetry, appTelemetryStopInternal, {"appId"}, {} )                                                     \
             def( "/health-check/get", healthCheckGet, healthCheckGet, { }, {} )                                                                     \
             def( "/voice/list", voiceList, voiceList, { }, {} )                                                                                     \
@@ -493,7 +493,7 @@ namespace DAB
         // this is the internal implementation for deviceTelemetryStart.  This is NOT the override for the users telemetry call
         //    this function takes the duration and sets up the calls to the appropriate telemetry method.  That method id described
         //    lower down in the codebase
-        jsonElement deviceTelemetryStartInternal ( int64_t durationMs, std::string const & )
+        jsonElement deviceTelemetryStartInternal ( int64_t durationMs )
         {
             if constexpr ( std::is_member_function_pointer_v<decltype ( &T::deviceTelemetry )> )
             {
@@ -516,7 +516,7 @@ namespace DAB
         // this is the internal implementation for applicationTelemetryStart.  This is NOT the override for the users telemetry call
         //    this function takes the duration and sets up the calls to the appropriate telemetry method.  That method id described
         //    lower down in the codebase
-        jsonElement appTelemetryStartInternal ( std::string const &appId, int64_t durationMs, std::string const & )
+        jsonElement appTelemetryStartInternal ( std::string const &appId, int64_t durationMs )
         {
             if constexpr ( std::is_member_function_pointer_v<decltype ( &T::appTelemetry )> )
             {
