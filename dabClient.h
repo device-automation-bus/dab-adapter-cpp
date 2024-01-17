@@ -390,12 +390,17 @@ namespace DAB
                     // check to see if our next to fire event time has been passed, if so get the telemetry data and publish it
                     if ( telemetryScheduler.begin ()->first < std::chrono::steady_clock::now ())
                     {
-                        // get the telemetry data (calling the callback passed in during addTelemetry)
-                        auto rsp = std::get<2>(telemetryScheduler.begin ()->second).get()->getTelemetry ();
-                        for (const jsonElement &response: rsp)
+                        try {
+                            // get the telemetry data (calling the callback passed in during addTelemetry)
+                            auto rsp = std::get<2>(telemetryScheduler.begin ()->second).get()->getTelemetry ();
+                            for (const jsonElement &response: rsp)
+                            {
+                                // call the publish callback to send the telemetry data to any subscribers
+                                publish ( std::get<1>(telemetryScheduler.begin ()->second), response );
+                            }
+                        } catch ( dabException &e )
                         {
-                            // call the publish callback to send the telemetry data to any subscribers
-                            publish ( std::get<1>(telemetryScheduler.begin ()->second), response );
+                            std::cerr << "dabException " << e.errorCode << ' ' << e.errorText << '\n';
                         }
 
                         // extract the node entry, calculate a new key value (execution time) and reinsert (no reallocation or copying, just some pointer manipulation so this is fast
