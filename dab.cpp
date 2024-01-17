@@ -26,7 +26,7 @@ class dab_panel : public DAB::dabClient<dab_panel>
 {
 public:
 
-    dab_panel ( std::string deviceId, std::string ipAddress ) : dabClient ( deviceId )
+    dab_panel ( std::string deviceId, std::string ipAddress ) : dabClient ( deviceId, ipAddress )
     {}
 
     static bool isCompatible ( char const *ipAddress )
