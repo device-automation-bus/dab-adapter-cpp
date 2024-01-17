@@ -111,16 +111,16 @@ public:
                 {"version", "2.0"}};
     }
 
-    DAB::jsonElement deviceTelemetry ()
+    std::vector<DAB::jsonElement> deviceTelemetry ()
     {
         // example exception
         throw DAB::dabException{501, "unsupported"};
     }
 
-    DAB::jsonElement appTelemetry ( std::string const &appId )
+    std::vector<DAB::jsonElement> appTelemetry ( std::string const &appId )
     {
         // example return
-        return { "app-status:", std::string ( "all systems nominal for " ) + appId };
+        return {{ "app-status:", std::string ( "all systems nominal for " ) + appId }};
     }
 
     // these are the prototypes for the currently unsupported operations

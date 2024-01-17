@@ -282,9 +282,9 @@ namespace DAB
                 return std::chrono::steady_clock::now ();
             }
 
-            virtual jsonElement getTelemetry ()
+            virtual std::vector<jsonElement> getTelemetry ()
             {
-                return {};
+                return {{}};
             }
 
             virtual void setInterval ( std::chrono::milliseconds newInterval )
@@ -312,7 +312,7 @@ namespace DAB
                 return std::chrono::steady_clock::now () + interval;
             }
 
-            jsonElement getTelemetry () override
+            std::vector<jsonElement> getTelemetry () override
             {
                 return callback ();
             }
@@ -392,8 +392,11 @@ namespace DAB
                     {
                         // get the telemetry data (calling the callback passed in during addTelemetry)
                         auto rsp = std::get<2>(telemetryScheduler.begin ()->second).get()->getTelemetry ();
-                        // call the publish callback to send the telemetry data to any subscribers
-                        publish ( std::get<1>(telemetryScheduler.begin ()->second), rsp );
+                        for (const jsonElement &response: rsp)
+                        {
+                            // call the publish callback to send the telemetry data to any subscribers
+                            publish ( std::get<1>(telemetryScheduler.begin ()->second), response );
+                        }
 
                         // extract the node entry, calculate a new key value (execution time) and reinsert (no reallocation or copying, just some pointer manipulation so this is fast
                         auto nodeHandle = telemetryScheduler.extract ( telemetryScheduler.begin ()->first );
@@ -493,7 +496,7 @@ namespace DAB
         // this is the internal implementation for deviceTelemetryStart.  This is NOT the override for the users telemetry call
         //    this function takes the duration and sets up the calls to the appropriate telemetry method.  That method id described
         //    lower down in the codebase
-        jsonElement deviceTelemetryStartInternal ( int64_t durationMs )
+        std::vector<jsonElement> deviceTelemetryStartInternal ( int64_t durationMs )
         {
             if constexpr ( std::is_member_function_pointer_v<decltype ( &T::deviceTelemetry )> )
             {
@@ -516,7 +519,7 @@ namespace DAB
         // this is the internal implementation for applicationTelemetryStart.  This is NOT the override for the users telemetry call
         //    this function takes the duration and sets up the calls to the appropriate telemetry method.  That method id described
         //    lower down in the codebase
-        jsonElement appTelemetryStartInternal ( std::string const &appId, int64_t durationMs )
+        std::vector<jsonElement> appTelemetryStartInternal ( std::string const &appId, int64_t durationMs )
         {
             if constexpr ( std::is_member_function_pointer_v<decltype ( &T::appTelemetry )> )
             {
@@ -689,12 +692,12 @@ namespace DAB
             throw dabException{501, "unsupported"};
         }
 
-        jsonElement deviceTelemetry ()
+        std::vector<jsonElement> deviceTelemetry ()
         {
             throw dabException{501, "unsupported"};
         }
 
-        jsonElement appTelemetry ( std::string const &appId )
+        std::vector<jsonElement> appTelemetry ( std::string const &appId )
         {
             throw dabException{501, "unsupported"};
         }
