@@ -561,12 +561,24 @@ namespace RDK
                 } );
             }
 
-            jsonElement voiceSessionRequest ( const std::string &audioFile, const std::string &type )
+            jsonElement voiceSessionRequest ( const std::optional<std::string> audioFile,
+                const std::optional<std::string> transcription, const std::string &type )
             {
-                return request ( "voiceSessionRequest", {
-                    {"audio_file", audioFile},
+                jsonElement params {
                     {"type", type}
-                } );
+                };
+
+                if ( audioFile.has_value () )
+                {
+                    params["audio_file"] = audioFile.value ();
+                }
+
+                if ( transcription.has_value() )
+                {
+                    params["transcription"] = transcription.value ();
+                }
+
+                return request ( "voiceSessionRequest", params );
             }
         };
 
@@ -610,7 +622,7 @@ namespace RDK
 
     public:
         Adapter ( const std::string &deviceId, const std::string &ipAddress ) :
-            dabClient ( deviceId ), rdk ( ipAddress ), RDK_KEYMAP ( createKeymap ( "/opt/dab_platform_keymap.json" ) )
+            dabClient ( deviceId, ipAddress ), rdk ( ipAddress ), RDK_KEYMAP ( createKeymap ( "/opt/dab_platform_keymap.json" ) )
         {
         }
 
@@ -1000,7 +1012,7 @@ namespace RDK
                 };
             } );
 
-            rdk.s<RDK::VoiceControl>().voiceSessionRequest ( voiceCommandFilename, "ptt_audio_file" );
+            rdk.s<RDK::VoiceControl>().voiceSessionRequest ( voiceCommandFilename, {}, "ptt_audio_file" );
 
             close (voiceCommandFd);
             std::remove ( voiceCommandFilename );
@@ -1008,12 +1020,18 @@ namespace RDK
             return {};
         }
 
-    #if 0
-        DAB::jsonElement voiceSendText ( std::string const &requestText, std::string const &voiceSystem )
+        jsonElement voiceSendText ( std::string const &requestText, std::string const &voiceSystem )
         {
-            throw std::pair ( 403, "not found" );
+            if ( voiceSystem != "AmazonAlexa" )
+            {
+                throw std::pair ( 400, std::format ( "Unsupported voice system '{}'", voiceSystem ) );
+            }
+
+            rdk.s<RDK::VoiceControl>().voiceSessionRequest ( {}, requestText, "ptt_transcription" );
+
+            return {};
         }
-    #endif
+
     private:
         static const inline std::unordered_set<std::string> COBALT_APP_IDS { "Cobalt", "Youtube", "YouTube" };
 
