@@ -260,7 +260,7 @@ namespace DAB
             def( "/voice/list", voiceList, voiceList, { }, {} )                                                                                     \
             def( "/voice/set", voiceSet, voiceSet, { "voiceSystem" }, {} )                                                                         \
             def( "/voice/send-audio", voiceSendAudio, voiceSendAudio, { "fileLocation" }, {"voiceSystem" } )                                       \
-            def( "/voice/send-text", voiceSendText, voiceSendText, { "requestText" }, {"voiceSystem" } )                                           \
+            def( "/voice/send-text", voiceSendText, voiceSendText, ({ "requestText", "voiceSystem" }), {} )                                           \
             def( "/version", version, version, { }, {} )
 
         // map by operation storing a pointer to the dispatcher and a bool if it has been implemented by the user
