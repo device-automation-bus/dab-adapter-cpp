@@ -556,14 +556,23 @@ namespace RDK
                 return request ( "voiceStatus" );
             }
 
-            jsonElement configureVoice ( bool enable, bool enablePtt )
+            jsonElement configureVoice ( std::optional<bool> enable, std::optional<bool> enablePtt )
             {
-                return request ( "configureVoice", {
-                    {"enable", enable},
-                    {"ptt", {
-                        {"enable", enablePtt}
-                    }}
-                } );
+                jsonElement params {};
+
+                if ( enable.has_value () )
+                {
+                    params["enable"] = enable.value ();
+                }
+
+                if ( enablePtt.has_value () )
+                {
+                    params["ptt"] = {
+                        {"enable", enablePtt.value ()}
+                    };
+                }
+
+                return request ( "configureVoice", params );
             }
 
             jsonElement voiceSessionRequest ( const std::optional<std::string> audioFile,
@@ -1045,6 +1054,8 @@ namespace RDK
 
         jsonElement voiceSendAudio ( std::string const &fileLocation, std::string const &voiceSystem )
         {
+            enableVoiceSystem ( voiceSystem );
+
             char voiceCommandFilename[] = "/tmp/dabvoicecommandXXXXXX";
             int voiceCommandFd = mkstemp ( voiceCommandFilename );
 
@@ -1065,10 +1076,7 @@ namespace RDK
 
         jsonElement voiceSendText ( std::string const &requestText, std::string const &voiceSystem )
         {
-            if ( voiceSystem != "AmazonAlexa" )
-            {
-                throw std::pair ( 400, std::format ( "Unsupported voice system '{}'", voiceSystem ) );
-            }
+            enableVoiceSystem ( voiceSystem );
 
             rdk.s<RDK::VoiceControl>().voiceSessionRequest ( {}, requestText, "ptt_transcription" );
 
@@ -1715,6 +1723,20 @@ namespace RDK
             }
 
             return {};
+        }
+
+        void enableVoiceSystem ( const std::string &voiceSystem )
+        {
+            const auto &voiceState = getVoiceSystemState ( "AmazonAlexa" );
+            if ( !voiceState.has_value () || ( !voiceSystem.empty() && voiceSystem != "AmazonAlexa" ) )
+            {
+                throw std::pair ( 400, std::format ( "Unsupported voice system" ) );
+            }
+
+            if ( !voiceState.value()["enabled"] )
+            {
+                rdk.s<RDK::VoiceControl>().configureVoice ( std::nullopt, true );
+            }
         }
     };
 }
