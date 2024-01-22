@@ -192,16 +192,12 @@ If a manufacturer wishes to hose the executable on the device itself, all that i
 
 ## Building the test code
 
-The library is distributed as a header-only library.  However it does have a dependency on the paho-mqtt library.  The library comes with a vcpkg.json file and as such you can utilize vcpkg to fetch the library.
+The library is distributed as a header-only library.  However, it does have dependencies on paho-mqtt, libcurl and Boost.Beast libraries. The library comes with a vcpkg.json file and as such you can utilize vcpkg to fetch the dependencies.
 
 You can use:
 
 ```shell
-vcpkg install
-```
-followed by
-```shell
-cmake -B build -S .
+cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=<path/to/vcpkg>/scripts/buildsystems/vcpkg.cmake
 cmake --build build
 ```
 
