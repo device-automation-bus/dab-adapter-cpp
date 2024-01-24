@@ -125,12 +125,29 @@ namespace RDK
         }
     };
 
-    class Interface
+    class Connection
     {
+    protected:
         boost::asio::io_context ctx;
+    public:
+        virtual std::string send_message ( const std::string &msg ) = 0;
+        virtual boost::asio::ip::address localAddress () = 0;
+
+        virtual ~Connection () = default;
+    };
+
+    class HttpConnection: public Connection
+    {
         boost::beast::tcp_stream stream;
 
-        std::string http_post ( const std::string &string )
+    public:
+        HttpConnection (const std::string &ipAddress): stream ( ctx )
+        {
+            stream.connect(boost::beast::tcp_stream::endpoint_type (
+                boost::asio::ip::address::from_string ( ipAddress ), 9998 ) );
+        }
+
+        std::string send_message ( const std::string &msg ) override
         {
             namespace beast = boost::beast;
 
@@ -138,7 +155,7 @@ namespace RDK
             req.method ( beast::http::verb::post );
             req.target ( "/jsonrpc" );
             req.set ( beast::http::field::content_type, "application/json" );
-            req.body () = string;
+            req.body () = msg;
             req.prepare_payload ();
 
             beast::http::write ( stream, req );
@@ -149,6 +166,22 @@ namespace RDK
 
             return res.body ();
         }
+
+        boost::asio::ip::address localAddress () override
+        {
+            return stream.socket ().local_endpoint ().address ();
+        }
+
+        ~HttpConnection () override
+        {
+            boost::beast::error_code ec;
+            stream.socket().shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
+        }
+    };
+
+    class Interface
+    {
+        std::unique_ptr<Connection> conn;
 
         class ServiceBase
         {
@@ -178,21 +211,11 @@ namespace RDK
         };
 
     public:
-        Interface (const std::string &ipAddress): stream ( ctx )
-        {
-            stream.connect(boost::beast::tcp_stream::endpoint_type (
-                boost::asio::ip::address::from_string ( ipAddress ), 9998 ) );
-        }
-
-        ~Interface ()
-        {
-            boost::beast::error_code ec;
-            stream.socket().shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
-        }
+        Interface (const std::string &ipAddress): conn ( std::make_unique<HttpConnection> ( ipAddress ) ) {}
 
         boost::asio::ip::address localAddress ()
         {
-            return std::move ( stream.socket ().local_endpoint ().address () );
+            return conn->localAddress ();
         }
 
         jsonElement request ( const std::string &method, const jsonElement &params = jsonElement ())
@@ -213,7 +236,7 @@ namespace RDK
             std::string buf;
             request.serialize ( buf, true );
 
-            auto reply = jsonParser ( http_post ( buf ).c_str () );
+            auto reply = jsonParser ( conn->send_message ( buf ).c_str () );
 
             if ( reply.has ( "error" ) )
             {
