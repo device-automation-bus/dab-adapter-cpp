@@ -23,6 +23,7 @@
 #include <boost/archive/iterators/transform_width.hpp>
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
+#include <boost/beast/websocket.hpp>
 
 namespace DAB
 {
@@ -179,6 +180,40 @@ namespace RDK
         }
     };
 
+    class WebsocketConnection: public Connection
+    {
+        boost::beast::websocket::stream<boost::asio::ip::tcp::socket> ws;
+
+    public:
+        WebsocketConnection (const std::string &ipAddress): ws ( ctx )
+        {
+            ws.next_layer ().connect ( boost::beast::tcp_stream::endpoint_type (
+                boost::asio::ip::address::from_string ( ipAddress ), 9998 ) );
+
+            ws.handshake (ipAddress, "/jsonrpc");
+        }
+
+        std::string send_message ( const std::string &msg ) override
+        {
+            ws.write ( boost::asio::buffer ( msg ) );
+
+            boost::beast::flat_buffer buffer;
+            ws.read ( buffer );
+
+            return boost::beast::buffers_to_string ( buffer.data () );
+        }
+
+        boost::asio::ip::address localAddress () override
+        {
+            return ws.next_layer ().local_endpoint ().address ();
+        }
+
+        ~WebsocketConnection () override
+        {
+            ws.close ( boost::beast::websocket::close_code::normal );
+        }
+    };
+
     class Interface
     {
         std::unique_ptr<Connection> conn;
@@ -211,7 +246,22 @@ namespace RDK
         };
 
     public:
-        Interface (const std::string &ipAddress): conn ( std::make_unique<HttpConnection> ( ipAddress ) ) {}
+        Interface (const std::string &ipAddress)
+        {
+            const std::string_view HTTP_PREFIX = "http://";
+            const std::string_view WS_PREFIX = "ws://";
+
+            if ( ipAddress.starts_with ( HTTP_PREFIX ) )
+            {
+                conn = std::make_unique<HttpConnection> ( ipAddress.substr (HTTP_PREFIX.length () ) );
+            } else if ( ipAddress.starts_with ( WS_PREFIX ) )
+            {
+                conn = std::make_unique<WebsocketConnection> ( ipAddress.substr (WS_PREFIX.length () ) );
+            } else
+            {
+                conn = std::make_unique<HttpConnection> ( ipAddress );
+            }
+        }
 
         boost::asio::ip::address localAddress ()
         {
