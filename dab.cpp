@@ -127,25 +127,18 @@ public:
     // to start receiving callbacks simply uncomment out any of the handlers you wish to receive calls for
     // the library will detect the fact that there is now a handler defined, add it to the dab/<deviceid>/oplist response
     // and begin routing request automatically.  Nothing else needs be done.
-#if 0
-    DAB::jsonElement deviceInfo ()
-    {
-        throw std::pair ( 403, "not found" );
-    }
+#if 1
 
     DAB::jsonElement appLaunch ( std::string const &appId, DAB::jsonElement const &elem )
     {
         throw std::pair ( 403, "not found" );
     }
-    DAB::jsonElement appLaunchWithContent ( std::string const &appId, std::string const &contentId, DAB::jsonElement const &elem )
-    {
-        throw std::pair ( 403, "not found" );
-    }
+
     DAB::jsonElement appGetState ( std::string const &appId )
     {
         throw std::pair ( 403, "not found" );
     }
-    DAB::jsonElement appExit ( std::string const &appId, bool force )
+    DAB::jsonElement appExit ( std::string const &appId, bool background )
     {
         throw std::pair ( 403, "not found" );
     }
@@ -157,7 +150,7 @@ public:
     {
         throw std::pair ( 403, "not found" );
     }
-    DAB::jsonElement systemSettingsSet ( jsonElement const &elem )
+    DAB::jsonElement systemSettingsSet ( DAB::jsonElement const &elem )
     {
         throw std::pair ( 403, "not found" );
     }
@@ -185,7 +178,7 @@ public:
     {
         throw std::pair ( 403, "not found" );
     }
-    DAB::jsonElement voiceSet ( jsonelement const &voiceSystem )
+    DAB::jsonElement voiceSet ( DAB::jsonElement const &voiceSystem )
     {
         throw std::pair ( 403, "not found" );
     }

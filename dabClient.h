@@ -20,6 +20,7 @@
 #include <initializer_list>
 #include <cassert>
 #include <chrono>
+#include <cstring>
 #include <functional>
 #include <string>
 #include <memory>
@@ -72,7 +73,7 @@ namespace DAB
     };
 
     // this is our actual dispatcher.
-    // It's purpose is to take call a c++ method, but call it with parameters that are extracted from the json parameter being passed in.
+    // Its purpose is to take call a c++ method, but call it with parameters that are extracted from the json parameter being passed in.
     // there are two types of parameter arrays.  fixedParams whose value MUST be present in the json, and optionalParams whose value need not be present in the json, and if not there a default constructed version is passed in
     // template takes the number of fixed and optional parameters, the type of class used to dispatch against and the R ( C:: * )(Args...)  prototype for the method to call
     template< size_t nFixed, size_t nOptional, typename T, class R, class C, class ... Args >
@@ -104,7 +105,7 @@ namespace DAB
         // this is the actual function we wish to dispatch against
         R ( C::*funcPtr ) ( Args... );
 
-        // these are the names of the fixed prameters we
+        // these are the names of the fixed parameters we
         std::vector<std::string_view> fixedParams;
         std::vector<std::string_view> optionalParams;
 
@@ -132,6 +133,10 @@ namespace DAB
                 } else if ( elem.has ( fixedParams[fixed] ))
                 {
                     return callFixed<fixed + 1, optional> ( cls, elem, types<Tail...>{}, std::forward<Vs> ( vs )..., elem[fixedParams[fixed]] );
+                } else if ( fixedParams[fixed] == "*" )
+                {
+                    // you can use the * to receive the entire json object without being parsed into parameters
+                    return callFixed<fixed + 1, optional> ( cls, elem, types<Tail...>{}, std::forward<Vs> ( vs )..., elem );
                 } else
                 {
                     throw dabException{400, std::string ( "missing parameter \"" ) + fixedParams[fixed].data () + "\""};
@@ -246,19 +251,19 @@ namespace DAB
             def( "/applications/launch", appLaunch, appLaunch, {"appId"}, {"parameters"} )                                                          \
             def( "/applications/launch-with-content", appLaunchWithContent, appLaunchWithContent, ({ "appId", "contentId" }), { "parameters" } )    \
             def( "/applications/get-state", appGetState, appGetState, { "appId" }, {} )                                                             \
-            def( "/applications/exit", appExit, appExit, {"appId"}, {"force"} )                                                                     \
+            def( "/applications/exit", appExit, appExit, {"appId"}, {"background"} )                                                                \
             def( "/device/info", deviceInfo, deviceInfo, {}, {} )                                                                                   \
             def( "/system/restart", systemRestart, systemRestart, {}, {} )                                                                          \
             def( "/system/settings/list", systemSettingsList, systemSettingsList, {}, {} )                                                          \
             def( "/system/settings/get", systemSettingsGet, systemSettingsGet, {}, {} )                                                             \
-            def( "/system/settings/set", systemSettingsSet, systemSettingsSet, { "settings" }, {} )                                                 \
+            def( "/system/settings/set", systemSettingsSet, systemSettingsSet, { "*" }, {} )                                                 \
             def( "/input/key/list", inputKeyList, inputKeyList, {}, {} )                                                                            \
             def( "/input/key-press", inputKeyPress, inputKeyPress, { "keyCode"}, {} )                                                               \
-            def( "/input/long-key-press", inputKeyLongPress, inputKeyLongPress, ({ "keyCode", "durationsMs" }), {} )                                \
+            def( "/input/long-key-press", inputKeyLongPress, inputKeyLongPress, ({ "keyCode", "durationMs" }), {} )                                \
             def( "/output/image", outputImage, outputImage, {}, {} )                                                                                \
-            def( "/device-telemetry/start", deviceTelemetry, deviceTelemetryStartInternal, ({ "duration", "topic" }), {} )                          \
+            def( "/device-telemetry/start", deviceTelemetry, deviceTelemetryStartInternal, ({ "duration" }), {} )                          \
             def( "/device-telemetry/stop", deviceTelemetry, deviceTelemetryStopInternal, {}, {} )                                                   \
-            def( "/app-telemetry/start", appTelemetry, appTelemetryStartInternal, ({ "appId", "duration", "topic" }), {} )                          \
+            def( "/app-telemetry/start", appTelemetry, appTelemetryStartInternal, ({ "appId", "duration" }), {} )                          \
             def( "/app-telemetry/stop", appTelemetry, appTelemetryStopInternal, {"appId"}, {} )                                                     \
             def( "/health-check/get", healthCheckGet, healthCheckGet, { }, {} )                                                                     \
             def( "/voice/list", voiceList, voiceList, { }, {} )                                                                                     \
@@ -277,7 +282,7 @@ namespace DAB
         std::condition_variable telemetryCondition;
 
         // base telemetry Executor class.   This will be specialized and should never be called directly.
-        // we need this as the executor is polymophic based on passe in types
+        // we need this as the executor is polymorphic based on passed in types
         class telemetryExecutor
         {
         public:
@@ -329,7 +334,7 @@ namespace DAB
         };
 
         // this is the structure used to schedule our telemetry callbacks.  Fundamentally it is a map with the index value being the next time for a callback
-        // we use a wait_until condition variable based on the front of the map (the next time something needs to be triggered.
+        // we use a wait_until condition variable based on the front of the map (the next time something needs to be triggered).
         // we can add things in at any time by simply doing a notify on the condition variable if we add additional telemetry slots in the future
         std::map<std::chrono::time_point<std::chrono::steady_clock>, std::tuple<std::string, std::string, std::unique_ptr<telemetryExecutor> >> telemetryScheduler;
 
@@ -494,7 +499,7 @@ namespace DAB
         // this is the internal implementation for deviceTelemetryStart.  This is NOT the override for the users telemetry call
         //    this function takes the duration and sets up the calls to the appropriate telemetry method.  That method id described
         //    lower down in the codebase
-        jsonElement deviceTelemetryStartInternal ( int64_t durationMs, std::string const & )
+        jsonElement deviceTelemetryStartInternal ( int64_t durationMs )
         {
             if constexpr ( std::is_member_function_pointer_v<decltype ( &T::deviceTelemetry )> )
             {
@@ -517,7 +522,7 @@ namespace DAB
         // this is the internal implementation for applicationTelemetryStart.  This is NOT the override for the users telemetry call
         //    this function takes the duration and sets up the calls to the appropriate telemetry method.  That method id described
         //    lower down in the codebase
-        jsonElement appTelemetryStartInternal ( std::string const &appId, int64_t durationMs, std::string const & )
+        jsonElement appTelemetryStartInternal ( std::string const &appId, int64_t durationMs )
         {
             if constexpr ( std::is_member_function_pointer_v<decltype ( &T::appTelemetry )> )
             {
@@ -547,47 +552,29 @@ namespace DAB
             jsonElement rsp;
             try
             {
-                if ( elem.has ( "topic" ) and elem.has ( "responseTopic" ) )
-                {
-                    std::string topic = elem["topic"];
-                    std::string responseTopic = elem["responseTopic"];
-                    std::string corData = elem.has ( "correlationData" ) ? elem["correlationData"] : "";
+                std::string topic = elem["topic"];
 
-                    auto it = dispatchMap.find ( topic );
-                    if ( it != dispatchMap.end ())
-                    {
-                        rsp["payload"] = (*it->second.first) ( static_cast<T *>(this), elem );
-                    }
-                    rsp["topic"] = responseTopic;
-                    if ( !corData.empty ())
-                    {
-                        rsp["correlationData"] = corData;
-                    }
-                    if ( !rsp["payload"].has ( "status" ))
-                    {
-                        rsp["payload"]["status"] = 200;
-                    }
-                } else
+                auto it = dispatchMap.find ( topic );
+                if ( it != dispatchMap.end ())
                 {
-                    rsp["payload"]["status"] = 400;
-                    rsp["payload"]["error"] = "malformed request";
+                    rsp = (*it->second.first) ( static_cast<T *>(this), elem );
+                }
+                if ( !rsp.has ( "status" ))
+                {
+                    rsp["status"] = 200;
                 }
             } catch ( std::pair<int, std::string> &e )
             {
-                rsp["payload"]["status"] = e.first;
-                rsp["payload"]["error"] = e.second;
+                rsp = { { "status", e.first, "error", e.second } };
             } catch ( std::pair<int, char const *> &e )
             {
-                rsp["payload"]["status"] = e.first;
-                rsp["payload"]["error"] = e.second;
+                rsp = { { "status", e.first, "error", e.second } };
             } catch ( dabException &e )
             {
-                rsp["payload"]["status"] = e.errorCode;
-                rsp["payload"]["error"] = e.errorText;
+                rsp = { { "status", e.errorCode, "error", e.errorText } };
             } catch ( ... )
             {
-                rsp["payload"]["status"] = 400;
-                rsp["payload"]["error"] = "unable to parse request";
+                rsp = { { "status", 400, "error", "unable to parse request" } };
             }
             return rsp;
         }
@@ -657,7 +644,7 @@ namespace DAB
             throw dabException{501, "unsupported"};
         }
 
-        jsonElement appExit ( std::string const &appId, bool force )
+        jsonElement appExit ( std::string const &appId, bool background )
         {
             throw dabException{501, "unsupported"};
         }

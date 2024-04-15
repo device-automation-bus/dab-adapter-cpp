@@ -83,7 +83,7 @@ Once we have instantiated all supported devices (it's possible for DAB::dabBridg
 
 ### DAB::dabMQTTInterface
 ```c++
-auto mqtt = DAB::dabMQTTInterface ( bridge, <mqtt bride ip address> );
+auto mqtt = DAB::dabMQTTInterface ( bridge, <mqtt bridge ip address> );
 ```
 
 After creation of the interface we can then start handling messages by connecting to the the mqttBridge
