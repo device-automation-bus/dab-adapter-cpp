@@ -16,7 +16,7 @@
 
 # Overview
 
-This C++ DAB adapter template is designed to ease the implementation of DAB operations. The library handles all message layer interfaces, parsing, and dispatch; this means a DAB partner can focus solely on filling out the implementation of DAB operations they wish the support incrementally.
+This C++ DAB adapter template is designed to ease the implementation of DAB operations. The library handles all message layer interfaces, parsing, and dispatch; this means a DAB partner can focus solely on the implementation of the DAB operations they wish the support incrementally.
 
 The library comes with handlers already implemented for the follow DAB operations:
 
@@ -24,7 +24,7 @@ The library comes with handlers already implemented for the follow DAB operation
     dab/<deviceId>/version
     dab/discovery
 
-All other DAB operations require partners to implement using relevant device APIs. Please be sure to leverage device APIs that most closely mimic the real customer interaction workflow.
+All other DAB operations require implementation by partners using relevant device APIs. Please be sure to leverage device APIs that most closely mimic the real customer interaction workflow.
 
 ## Structure
 The reference code is distributed as a header-only library.
@@ -43,7 +43,7 @@ External dependencies.
 ## Implementation
 
 ### DAB::dabClient
-The dabClient class implments all the basic functionality needed to implement the DAB interface.   You must inherit it using the CRTP patttern.  This is used to allow the class to detect overrides of functionality and to auto-populate the opList DAB method.
+The dabClient class implements all the basic functionality needed to implement the DAB interface.   You must inherit it using the CRTP pattern.  This is used to allow the class to detect overrides of functionality and to auto-populate the opList DAB method.
 A minimal class inheriting from DAB::dabClient with no methods being implemented (other than those implemented by DAB::dabClient would be
     
 ```c++
@@ -61,7 +61,7 @@ A minimal class inheriting from DAB::dabClient with no methods being implemented
         }
     };
 ```
-Classes inheriting DAB::dabClient should not be instantiated directly.  Instead the class type is passed as a parameter to DAB::dabBridge.
+Classes inheriting DAB::dabClient should not be instantiated directly.  Instead, the class type is passed as a parameter to DAB::dabBridge.
 
 ### DAB::dabBridge
 
@@ -87,13 +87,13 @@ Once we have instantiated all supported devices (it's possible for DAB::dabBridg
 auto mqtt = DAB::dabMQTTInterface ( bridge, <mqtt bridge ip address> );
 ```
 
-After creation of the interface we can then start handling messages by connecting to the the mqttBridge
+After creation of the interface we can then start handling messages by connecting to the mqttBridge
 
 ```c++
     mqtt.connect ();
 ```
 
-This method will spawn off a worker thread to handle incoming mqtt requests and pass appropriate requests to the dabClient object instantiated with associated deviceId during construction.
+This method will spawn a worker thread to handle incoming mqtt requests and pass appropriate requests to the dabClient object instantiated with associated deviceId during construction.
 
 Because all activity occurs within a worker thread, a wait method is supplied.  This method will exit only after the mqttBridge closes the connetion or the mqtt.disconnect() method is called
 
@@ -159,7 +159,7 @@ DAB::jsonElmement x={{"status",                200},
                 {"textToSpeech",          true}};
 ```
 
-The jsonElment class also supports the has ( <"name"> ) method.   This can be used to detect if a jsonElement object has a specified name associated with it.
+The jsonElement class also supports the has ( <"name"> ) method.   This can be used to detect if a jsonElement object has a specified name associated with it.
 By convention, a reference is returned to the value, so simply accessing a value in an object that does not contain that named value will create the name/value pair and return a reference to the value.
 
 This then allows you to programmatically create json objects.
@@ -188,12 +188,12 @@ DAB::jsonElment x = { DAB::jsonElement::array, "name", "value" };  // this will 
 ## Bridge vs Hosted
 
 The library can be used in both bridge, where it executes on a test platform, and communicates with the device under test via a manufacturers proprietary testing protocol, or alternatively, it can execute on the device itself.
-The library is entirely agnostic with regard to the communication path to the device.  By default an IP address is passed in, however this is simply a string.  It can be null, or any other identifier the developer wishes to use.
+The library is entirely agnostic with regard to the communication path to the device.  By default, an IP address is passed in, however this is simply a string.  It can be null, or any other identifier the developer wishes to use.
 If a manufacturer wishes to hose the executable on the device itself, all that is required is for the isCompatible() method to return true if the executable is capable of communicating with the hardware, and for the methods to implement the necessary communication path.
 
 ## Building the test code
 
-The library is distributed as a header-only library.  However it does have a dependency on the paho-mqtt library.  The library comes with a vcpkg.json file and as such you can utilize vcpkg to fetch the library.
+The library is distributed as a header-only library.  However, it does have a dependency on the paho-mqtt library.  The library comes with a vcpkg.json file and as such you can utilize vcpkg to fetch the library.
 
 You can use:
 
