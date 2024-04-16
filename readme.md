@@ -16,7 +16,7 @@
 
 # Overview
 
-This C++ DAB adapter code is designed to ease the implementation of DAB operations. The library handles all MQTT message layer interfaces, parsing, and dispatch, which means a DAB partner can focus solely on filling out the implementation of DAB operations they wish the support incrementally.
+This C++ DAB adapter template is designed to ease the implementation of DAB operations. The library handles all message layer interfaces, parsing, and dispatch; this means a DAB partner can focus solely on filling out the implementation of DAB operations they wish the support incrementally.
 
 The library comes with handlers already implemented for the follow DAB operations:
 
@@ -24,7 +24,7 @@ The library comes with handlers already implemented for the follow DAB operation
     dab/<deviceId>/version
     dab/discovery
 
-Other operations are optional and are up to the user to implement.
+All other DAB operations require the user to implement using relevant device APIs. Please be sure to leverage device APIs that most closely mimic the real user interaction workflow.
 
 ## Structure
 The reference code is distributed as a header-only library.
