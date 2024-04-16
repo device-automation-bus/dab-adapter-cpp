@@ -24,7 +24,7 @@ The library comes with handlers already implemented for the follow DAB operation
     dab/<deviceId>/version
     dab/discovery
 
-All other DAB operations require the user to implement using relevant device APIs. Please be sure to leverage device APIs that most closely mimic the real user interaction workflow.
+All other DAB operations require partners to implement using relevant device APIs. Please be sure to leverage device APIs that most closely mimic the real customer interaction workflow.
 
 ## Structure
 The reference code is distributed as a header-only library.
