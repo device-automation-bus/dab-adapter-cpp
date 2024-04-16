@@ -16,7 +16,7 @@
 
 # Overview
 
-This C++ DAB adapter template is designed to ease the implementation of DAB operations. The library handles all message layer interfaces, parsing, and dispatch; this means a DAB partner can focus solely on the implementation of the DAB operations they wish the support incrementally.
+This C++ DAB adapter template is designed to ease the implementation of [DAB operations](https://github.com/device-automation-bus/dab-specification-2.0?tab=readme-ov-file#5-dab-operations). The library handles all message layer interfaces, parsing, and dispatch; this means a DAB partner can focus solely on the implementation of the DAB operations they wish the support incrementally.
 
 The library comes with handlers already implemented for the follow DAB operations:
 
