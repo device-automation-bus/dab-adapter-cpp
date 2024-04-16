@@ -18,7 +18,7 @@
 #include "dabMqttInterface.h"
 
 // This is the main client class for the DAB protocol.   Methods in this class will be called upon receipt of a DAB message
-// This class must inherit from DAB::dabCLient.   The template takes two parameters, the first one is the type of the class being created.
+// This class must inherit from DAB::dabClient.   The template takes two parameters, the first one is the type of the class being created.
 // this is a CRTP pattern and internally is used for detection of shadowed methods to detect implementation by the class.
 // the second is a string literal "name" for the class.  This is used by the bridge function to allow for symbolic instantiation of the class
 // using only a string literal to select among multiple implementations.
@@ -125,10 +125,9 @@ public:
 
     // these are the prototypes for the currently unsupported operations
     // to start receiving callbacks simply uncomment out any of the handlers you wish to receive calls for
-    // the library will detect the fact that there is now a handler defined, add it to the dab/<deviceid>/oplist response
+    // the library will detect the fact that there is now handler defined, add it to the dab/<deviceid>/oplist response
     // and begin routing request automatically.  Nothing else needs be done.
-#if 1
-
+#if 0
     DAB::jsonElement appLaunch ( std::string const &appId, DAB::jsonElement const &elem )
     {
         throw std::pair ( 403, "not found" );
