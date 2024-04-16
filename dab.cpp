@@ -125,7 +125,7 @@ public:
 
     // these are the prototypes for the currently unsupported operations
     // to start receiving callbacks simply uncomment out any of the handlers you wish to receive calls for
-    // the library will detect the fact that there is now handler defined, add it to the dab/<deviceid>/oplist response
+    // the library will detect the fact that there is now a defined handler, add it to the dab/<deviceid>/oplist response
     // and begin routing request automatically.  Nothing else needs be done.
 #if 0
     DAB::jsonElement appLaunch ( std::string const &appId, DAB::jsonElement const &elem )
