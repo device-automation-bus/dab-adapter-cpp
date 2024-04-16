@@ -133,6 +133,12 @@ Internally the jsonElement supports int64_t, std::string, double, bool and null 
 
 null can be set by calling the clear() method and tested for with isNull().
 
+Alternately, if you know the element does not exist, simply accessing it will create a null element as the accessor returns a writable reference;
+```c++
+jsonElement x;
+x["test"];  // creates a reference to a null json element
+```
+
 #### objects
 ```c++
 DAB::jsonElement x = { {"name", "value"}};
@@ -175,7 +181,7 @@ x["name2"] = "value 2";
 DAB::jsonElement x = { 1, 2, 3, 4, 5 };
 int64_t y = x[2];
 ```
-Arrays are declared and accessed in a fashion to std::vector but with restricted functionality.
+Arrays are declared and accessed in a fashion similar to std::vector but with restricted functionality.
 
 A special case, however exists if, in the case of an array of length two with the first element being a string.  By convention, the library will assume all length-2 arrays with the first element being a string to represent a jsonObject and not an array.
 
