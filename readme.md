@@ -16,7 +16,8 @@
 
 # Overview
 
-The C++ DAB reference code is designed to ease implementation of a DAB client.   The library implements all necessary interface, parsing, dispatch, etc. and requires the implementor to implement only the methods they wish the support.
+This C++ DAB adapter code is designed to ease the implementation of DAB operations. The library handles all MQTT message layer interfaces, parsing, and dispatch, which means a DAB partner can focus solely on filling out the implementation of DAB operations they wish the support incrementally.
+
 The library comes with handlers already implemented for the follow DAB operations:
 
     dab/<deviceId>/operations/list
