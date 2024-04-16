@@ -198,17 +198,17 @@ public:
 
 int main ( int argc, char *argv[] )
 {
-    // dabBridge takes a list of class types
-    DAB::dabBridge<dab_panel> bridge;
-
     if ( argc != 4 )
     {
         std::cout << "usage dab <mqtt broker> <deviceId> <ipAddress>" << std::endl;
         return 0;
     }
 
-    // this instantiates a particular class based.  It takes <deviceId> as the first parameter and the <ipAddress>
-    // of the device as the second parameter
+    // dabBridge takes a list of class types
+    DAB::dabBridge<dab_panel> bridge;
+
+    // this instantiates a particular class based on the class's response to isCompatible call.
+    // It takes <deviceId> as the first parameter and the <ipAddress> of the device as the second parameter
     bridge.makeDeviceInstance ( argv[2], argv[3] );
 
     // this creates the mqtt interface.  It takes the bridge and the ip address of the mqtt broker
