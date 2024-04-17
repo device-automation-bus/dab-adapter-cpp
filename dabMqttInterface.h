@@ -73,15 +73,6 @@ namespace DAB
             return MQTTProperties_getProperty ( &message->properties, MQTTPROPERTY_CODE_CORRELATION_DATA );
         }
 
-        static char *strndup ( char const *data, int len )
-        {
-            char *res = (char *)malloc ( len + 1 );
-            strncpy ( res, data, len + 1 );
-            res[len] = 0;
-
-            return res;
-        }
-
         // this is the message arrived callback.   paho-mqtt uses a void parameter (thin wrapper around a C library).
         // it would have been nice if it was a template that took the calling object as a parameter so that we could maintain type safety.
         // the method takes the context and reinterprets it to the dabMQTTInterface object.
@@ -97,12 +88,12 @@ namespace DAB
 
                 // the dispatcher requires the topic to be part of the DAB request.  Add it in.
                 req["topic"] = topic;
-                // we put the payload in it's own "payload" value in the json object
+                // we put the payload in its own "payload" value in the json object
                 req["payload"] = jsonParser ( reqStr.c_str ());
                 // this leaves us the capability of adding other properties into the top level
                 // that might be needed by a potential handler. for instance topic is currently sent
                 // but a handler might want responseTopic for logging purposes or correlation data
-                // we currently don't send those but it's you can do so by commenting out the below lines
+                // we currently don't send those, but you can do so by commenting out the below lines
                 // req["responseTopic"] = getResponseTopic ( message );
                 // req["correlationData"] = hasCorrelationData ( message ) ? getCorrelationData ( message ) : "";
                 // dispatch to the bridge and start get the response
@@ -124,7 +115,7 @@ namespace DAB
                     auto corr_data_req_prop = getCorrelationData ( message );
                     MQTTProperty corr_data_resp_prop;
                     corr_data_resp_prop.identifier = MQTTPROPERTY_CODE_CORRELATION_DATA;
-                    corr_data_resp_prop.value.data.data = strndup(corr_data_req_prop->value.data.data, corr_data_req_prop->value.data.len);
+                    corr_data_resp_prop.value.data.data = corr_data_req_prop->value.data.data;
                     corr_data_resp_prop.value.data.len = corr_data_req_prop->value.data.len;
 
                     int rc = MQTTProperties_add(&clientMessage.properties, &corr_data_resp_prop);
