@@ -50,7 +50,7 @@ namespace DAB
         };
 
         template< typename C >
-        struct is_associative_container<C, typename C::key_type>
+        struct is_associative_container<C, typename C::mapped_type>
         {
             static constexpr bool value = true;
         };
