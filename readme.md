@@ -209,7 +209,8 @@ vcpkg integrate install
 ```
 followed by
 ```shell
-cmake -B build -S .
+cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=path/from/vcpkg/integrate/
+
 cmake --build build
 ```
 
