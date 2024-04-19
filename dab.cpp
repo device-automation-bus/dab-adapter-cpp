@@ -204,21 +204,26 @@ int main ( int argc, char *argv[] )
         return 0;
     }
 
-    // dabBridge takes a list of class types
-    DAB::dabBridge<dab_panel> bridge;
+    try {
+        // dabBridge takes a list of class types
+        DAB::dabBridge<dab_panel> mqttBridge;
 
-    // this instantiates a particular class based on the class's response to isCompatible call.
-    // It takes <deviceId> as the first parameter and the <ipAddress> of the device as the second parameter
-    bridge.makeDeviceInstance ( argv[2], argv[3] );
+        // this instantiates a particular class based on the class's response to isCompatible call.
+        // It takes <deviceId> as the first parameter and the <ipAddress> of the device as the second parameter
+        mqttBridge.makeDeviceInstance ( argv[2], argv[3] );
 
-    // this creates the mqtt interface.  It takes the bridge and the ip address of the mqtt broker
-    auto mqtt = DAB::dabMQTTInterface ( bridge, argv[1] );
+        // this creates the mqtt interface.  It takes the bridge and the ip address of the mqtt broker
+        auto mqtt = DAB::dabMQTTInterface ( mqttBridge, argv[1] );
 
-    // this connects the mqtt interface to the mqtt broker
-    mqtt.connect ();
+        // this connects the mqtt interface to the mqtt broker
+        mqtt.connect ();
 
-    // wait forever or until the connection with the broker is finished
-    // a user can call mqtt.disconnect() to gracefully exit.
-    mqtt.wait ();
+        // wait forever or until the connection with the broker is finished
+        // a user can call mqtt.disconnect() to gracefully exit.
+        mqtt.wait ();
+    } catch ( DAB::dabException e )
+    {
+        std::cout << "error: " << e.errorCode << " " << e.errorText << std::endl;
+    }
 }
 

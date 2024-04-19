@@ -168,23 +168,16 @@ namespace DAB
 
         dabMQTTInterface ( BRIDGE &bridge, std::string const &brokerAddress ) : bridge ( bridge )
         {
-            // create the mqtt object
-
-            MQTTClient_createOptions create_opts = MQTTClient_createOptions_initializer;
-            create_opts.MQTTVersion = MQTTVERSION_5;
-
-            if ( auto rc = MQTTClient_createWithOptions ( &client, brokerAddress.c_str (), "dab", MQTTCLIENT_PERSISTENCE_NONE, nullptr, &create_opts ))
+            if ( auto rc = MQTTClient_create(&client, brokerAddress.c_str(), "dab", MQTTCLIENT_PERSISTENCE_NONE, nullptr) )
             {
-                throw DAB::dabException ( rc, std::string ( "Failed to create client" ));
+                throw DAB::dabException ( rc, std::string ( "Failed to create client" ) );
             }
 
-            // set it's callbacks
-            if ( auto rc = MQTTClient_setCallbacks ( client, this, connectionLost, messageArrived, nullptr ))
+            if ( auto rc = MQTTClient_setCallbacks(client, this, connectionLost, messageArrived, nullptr) )
             {
-                throw DAB::dabException ( rc, std::string ( "Failed to set callbacks" ));
+                throw DAB::dabException ( rc, std::string ( "Failed to set callbacks" ) );
             }
-            // give the bridge the publishing callback
-            bridge.setPublishCallback ( std::function ( [this] ( jsonElement const &elem ) { return publishCB ( elem ); } ));
+            bridge.setPublishCallback ( std::function ( [this](jsonElement const &elem){ return publishCB ( elem );} ) );
         }
 
         ~dabMQTTInterface ()
@@ -193,32 +186,27 @@ namespace DAB
         }
 
         // this is the method to actually establish a connection with the mqtt broker.  At this point any initialization that needs to be done should have finished
-        auto connect ()
-        {
-            MQTTClient_connectOptions conn_opts = MQTTClient_connectOptions_initializer5;
+        auto connect() {
+            MQTTClient_connectOptions conn_opts = MQTTClient_connectOptions_initializer;
 
             conn_opts.keepAliveInterval = 20;
 
-            auto rc = MQTTClient_connect5 ( client, &conn_opts, nullptr, nullptr );
-            if ( rc.reasonCode !=  MQTTREASONCODE_SUCCESS )
+            if ( auto rc = MQTTClient_connect(client, &conn_opts) )
             {
-                throw DAB::dabException ( rc.reasonCode, std::string ( "Failed to set connect" ));
+                throw DAB::dabException ( rc, std::string ( "Failed to set connect" ) );
             }
 
             auto topics = bridge.getTopics ();
 
-            for ( auto const &topic: topics )
+            for ( auto const &topic : topics )
             {
-                auto rc2 = MQTTClient_subscribe5 ( client, topic.c_str (), 1, nullptr, nullptr );
-                if ( rc2.reasonCode != MQTTREASONCODE_SUCCESS )
+                if ( auto rc = MQTTClient_subscribe(client, topic.c_str(), 1) )
                 {
-                    throw DAB::dabException ( rc.reasonCode, std::string ( "Failed to subscribe" ));
+                    throw DAB::dabException ( rc, std::string ( "Failed to subscribe" ) );
                 }
             }
-
             return 0;
         }
-
         // this function should be called when the client wish's to cleanly end the mqtt interface in preparation for exiting.
         auto disconnect ()
         {
