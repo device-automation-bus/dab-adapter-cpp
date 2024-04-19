@@ -205,6 +205,7 @@ You can use:
 
 ```shell
 vcpkg install
+vcpkg integrate install
 ```
 followed by
 ```shell
@@ -212,10 +213,34 @@ cmake -B build -S .
 cmake --build build
 ```
 
-to build the dab example program.
+to build the DAB C++ Adapter.
 
-To start the example you would:
+The program accepts 3 parameters by default in-order:
+
+| Argument Position / Name        | Type           | Description  |
+| :-------------: |:-------------:| :-----:|
+| mqttBrokerIpAddress:port      | string | This is the IP address of the MQTT Broker (either in-device in native mode, or outside device in bridged mode) paired with the port number (**1883** is expected) |
+| dabDeviceId      | string      |   This is a unique identifier that represents a device under test. Set anything unique to the device for which DAB is being implemented. |
+| bridgedDeviceUnderTestIpAddress | string      |  This is relevant only if this implementation will be in Bridged mode (IE the adapter and MQTT broker are outside the device). In a native mode, you will directly use device APIs and hence this can be _null_.  |
+
 
 ```shell
-build/dab ""<mqttBrokerIpAddress:port>"" "<deviceId>" "<deviceUnderTestIpAddress">
+build/dab <mqttBrokerIpAddress:port> <dabDeviceId> <bridgedDeviceUnderTestIpAddress>
 ```
+
+For a native implementation, an example invocation could be:
+
+```shell
+build/dab 127.0.0.1:1883 my-unique-device-id null
+```
+
+For a bridged implementation with the device on the same network, an example invocation could be:
+
+```shell
+build/dab 192.168.144.23:1883 my-unique-device-id 192.168.144.55
+```
+
+
+
+
+
