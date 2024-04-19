@@ -998,7 +998,7 @@ namespace DAB
 
         static bool isNum ( char const c )
         {
-            if (((c >= '0') && (c <= '9')) || (c == '+') || (c <= '-'))
+            if (((c >= '0') && (c <= '9')) || (c == '+') || (c == '-'))
             {
                 return true;
             }

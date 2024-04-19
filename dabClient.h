@@ -241,7 +241,8 @@ namespace DAB
     template< typename T >
     class dabClient : public dabInterface
     {
-        const std::string protocolVersion = "2.0";        // version of the DAB protocol being implemented
+        const std::string protocolVersion = "2.0";          // version of the DAB protocol being implemented
+        std::string ipAddress;                              // ip address for dab/discovery response
 
         // this is an XMACRO list of def() macro's.   It contains the dab method name, the name of the method to call and to arrays of fixed and optional parameters defined as string literals
         // NOTE: multiple fixed or optional parameters need to be enclosed in ()   this is a preprocessor limitation, it will work just fine if you do this
@@ -274,8 +275,6 @@ namespace DAB
 
         // map by operation storing a pointer to the dispatcher and a bool if it has been implemented by the user
         std::map<std::string, std::pair<std::unique_ptr<dispatcher<T>>, bool>> dispatchMap;
-        // the deviceID for this client
-        std::string deviceId;
 
         // telemetry mutex and condition variable for scheduling
         std::mutex telemetryAccess;
@@ -415,11 +414,15 @@ namespace DAB
             }
         }
 
+    protected:
+        // the deviceID for this client
+        std::string deviceId;
+
     public:
 
         std::thread  telemetryThreadId;
 
-        explicit dabClient ( std::string const &deviceId ) : deviceId ( deviceId )
+        explicit dabClient ( std::string const &deviceId, std::string const &ipAddress ) : deviceId ( deviceId ), ipAddress ( ipAddress )
         {
             // XMACRO instantiation of our list of method names, methods and fixed and optional parameters
             // this is resolved into a map of method name and a pair of unique pointers to a nativeDispatcher
@@ -494,7 +497,7 @@ namespace DAB
         // returns the currently supported protocol version
         jsonElement discovery ()
         {
-            return {{"ip", ""}, {"deviceId", deviceId} };
+            return {{"ip", ipAddress}, {"deviceId", deviceId} };
         }
         // this is the internal implementation for deviceTelemetryStart.  This is NOT the override for the users telemetry call
         //    this function takes the duration and sets up the calls to the appropriate telemetry method.  That method id described
