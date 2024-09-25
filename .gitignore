@@ -80,3 +80,6 @@ fabric.properties
 
 vcpkg_installed
 build
+
+.vscode
+.idea
