@@ -53,14 +53,15 @@ namespace DAB
 
         static std::string getResponseTopic ( MQTTClient_message *message )
         {
-            if ( MQTTProperties_hasProperty ( &message->properties, MQTTPROPERTY_CODE_RESPONSE_TOPIC ) )
+                if(MQTTProperties_hasProperty(&message->properties, MQTTPROPERTY_CODE_RESPONSE_TOPIC))
             {
                 auto *property = MQTTProperties_getProperty ( &message->properties, MQTTPROPERTY_CODE_RESPONSE_TOPIC );
 
                 auto res = std::string ( property->value.data.data, property->value.data.len );
+                std::cout << "getResponseTopic: " << res << std::endl;
                 return res;
             }
-            return "";
+            return "dab/response"; // Hardcoded default response topic, with an empty result we the client would crash
         }
 
         static bool hasCorrelationData ( MQTTClient_message *message )
@@ -123,15 +124,21 @@ namespace DAB
 
                 // get the mutex to serialize calls to the mqtt library
                 std::lock_guard l1 ( mqttInterface->runningMutex );
-                if ( auto rc = MQTTClient_publishMessage ( mqttInterface->client, getResponseTopic ( message ).c_str (), &clientMessage, nullptr ))
+                MQTTResponse publishResult = MQTTClient_publishMessage5( mqttInterface->client, getResponseTopic (message).c_str (), &clientMessage, nullptr);
+
+                if (publishResult.reasonCode)
                 {
-                    throw DAB::dabException ( rc, "error publishing message" );
+                    throw DAB::dabException (publishResult.reasonCode, "error publishing message" );
                 }
+
+                MQTTResponse_free(publishResult);
+                std::cout << "Finished publishing response on topic " << getResponseTopic(message) <<  std::endl;
             } catch ( DAB::dabException &e )
             {
                 std::cout << "error (" << e.errorCode << "): " << e.errorText << std::endl;
             } catch ( ... )
             {
+                std::cout << "Other errors caught" << std::endl;
             }
             return 1;
         }
@@ -151,7 +158,7 @@ namespace DAB
             clientMessage.retained = 0;
 
             std::lock_guard l1 ( runningMutex );
-            if ( auto rc = MQTTClient_publishMessage ( client, elem["topic"].operator const std::string & ().c_str (), &clientMessage, nullptr ))
+            if ( auto rc = MQTTClient_publishMessage5( client, elem["topic"].operator const std::string & ().c_str (), &clientMessage, nullptr ).reasonCode)
             {
                 throw DAB::dabException ( rc, "error publishing message" );
             }
@@ -159,6 +166,7 @@ namespace DAB
 
         static void connectionLost ( void *context, char * )
         {
+            std::cout << "Got connectionLost()" << std::endl;
             auto *mqttInterface = reinterpret_cast<dabMQTTInterface *>(context);
             std::lock_guard l1 ( mqttInterface->runningMutex );
             mqttInterface->running.notify_all ();
@@ -187,7 +195,7 @@ namespace DAB
 
         // this is the method to actually establish a connection with the mqtt broker.  At this point any initialization that needs to be done should have finished
         auto connect() {
-            MQTTClient_connectOptions conn_opts = MQTTClient_connectOptions_initializer;
+            MQTTClient_connectOptions conn_opts = MQTTClient_connectOptions_initializer5;
 
             conn_opts.keepAliveInterval = 20;
 
@@ -200,10 +208,14 @@ namespace DAB
 
             for ( auto const &topic : topics )
             {
-                if ( auto rc = MQTTClient_subscribe(client, topic.c_str(), 1) )
+                MQTTResponse subscriptionResponse = MQTTClient_subscribe5(client, topic.c_str(), 1, nullptr, nullptr);
+                int reasonCode = subscriptionResponse.reasonCode;
+                if (reasonCode != MQTTCLIENT_SUCCESS && reasonCode != 1) // If successful, the QoS of 1 might be returned as well, that is still valid
                 {
-                    throw DAB::dabException ( rc, std::string ( "Failed to subscribe" ) );
+                    throw DAB::dabException (reasonCode, std::string ( "Failed to subscribe" ) );
                 }
+                MQTTResponse_free(subscriptionResponse);
+                std::cout << "Subscribed to MQTT topic: " << topic << std::endl;
             }
             return 0;
         }

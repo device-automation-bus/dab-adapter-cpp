@@ -218,9 +218,13 @@ int main ( int argc, char *argv[] )
         // this connects the mqtt interface to the mqtt broker
         mqtt.connect ();
 
+        std::cout << "Connected to MQTT Broker!" << std::endl;
+
         // wait forever or until the connection with the broker is finished
         // a user can call mqtt.disconnect() to gracefully exit.
         mqtt.wait ();
+
+        std::cout << "Wait() finished, exiting" << std::endl;
     } catch ( DAB::dabException e )
     {
         std::cout << "error: " << e.errorCode << " " << e.errorText << std::endl;
