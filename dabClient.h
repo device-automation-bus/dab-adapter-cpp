@@ -568,16 +568,16 @@ namespace DAB
                 }
             } catch ( std::pair<int, std::string> &e )
             {
-                rsp = { { "status", e.first, "error", e.second } };
+                rsp = { { "status", e.first }, { "error", e.second } };
             } catch ( std::pair<int, char const *> &e )
             {
-                rsp = { { "status", e.first, "error", e.second } };
+                rsp = { { "status", e.first }, { "error", e.second } };
             } catch ( dabException &e )
             {
-                rsp = { { "status", e.errorCode, "error", e.errorText } };
+                rsp = { { "status", e.errorCode }, { "error", e.errorText } };
             } catch ( ... )
             {
-                rsp = { { "status", 400, "error", "unable to parse request" } };
+                rsp = { { "status", 400 }, { "error", "unable to parse request" } };
             }
             return rsp;
         }
