@@ -1024,7 +1024,7 @@ namespace DAB
         }
     };
 
-    jsonElement jsonParser ( char const *str )
+    inline jsonElement jsonParser ( char const *str )
     {
         auto tmpStr = &str;
         auto result = jsonElement ( tmpStr );
